@@ -2,9 +2,6 @@
 #include "cartmesh.hpp"
 #endif
 
-/// Generate a non-uniform mesh in a cuboid
-void generateCartMesh(PetscInt npdim[NDIM], PetscReal rmin[NDIM], PetscReal rmax[NDIM], CartMesh *const m);
-
 /// Set RHS = 3sin(x)sin(y)sin(z) for u_exact = sin(x)sin(y)sin(z)
 void computeRHS(Vec f, Vec uexact, const CartMesh *const m)
 {
@@ -31,4 +28,18 @@ void computeRHS(Vec f, Vec uexact, const CartMesh *const m)
 	free(valuesrhs);
 	free(valuesexact);
 	free(indices);
+}
+
+int main(int argc, char* argv[])
+{
+	char help[] = "Solves 3D Poisson equation by finite differences.\n\n";
+	char * optfile;
+	PetscMPIInt size;
+
+	PetscInitialize(&argc, &argv, optfile, help);
+	MPI_Comm_size(PETSC_COMM_WORLD,&size);
+	if (size != 1) SETERRQ(PETSC_COMM_SELF,1,"Currently single processor only!");
+
+	PetscFinalize();
+	return 0;
 }

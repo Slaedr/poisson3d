@@ -6,11 +6,13 @@
 #endif
 
 /// Non-uniform Cartesian grid
+/** Note that memory for storage of coordinates along the axes is allocated on construction.
+ */
 class CartMesh
 {
-	const PetscInt npoind[NDIM];
+	const PetscInt npoind[NDIM];	///< Array storing the number of points on each coordinate axis
 	PetscReal ** coords;			///< Stores an array for each of the 3 axes - coords[i][j] refers to the j-th node along the i-axis
-	PetscInt npointotal;
+	PetscInt npointotal;			///< Total number of points in the grid
 public:
 	CartMesh(const PetscInt npdim[NDIM]) : npoind(npdim)
 	{
@@ -69,4 +71,20 @@ public:
 	{
 		return coords;
 	}
+
+	/// Generate a non-uniform mesh in a cuboid corresponding to Chebyshev points in each direction
+	/** For interval [a,b], a Chebyshev distribution of N points including a and b is computed as
+	 * x_i = (a+b)/2 + (a-b)/2 * cos(pi - i*theta)
+	 * where theta = pi/(N-1)
+	 */
+	void generateMesh_ChebyshevDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM])
+	{
+		for(int idim = 0; idim < NDIM; idim++)
+		{
+			PetscReal theta = PI/(npoind[idim]-1);
+			for(int i = 0; i < npoind[idim]; i++)
+				coords[idim][i] = (rmax[idim]+rmin[idim])*0.5 + (rmax[idim]-rmin[idim])*0.5*std::cos(PI-i*theta);
+		}
+	}
+
 };
