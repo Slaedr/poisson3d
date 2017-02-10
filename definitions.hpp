@@ -10,6 +10,8 @@
 
 #define NDIM 3
 
+#define NSTENCIL 7
+
 #define PI 3.141592653589793238
 
 #endif

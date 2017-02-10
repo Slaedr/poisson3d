@@ -43,7 +43,7 @@ public:
 		return npoind[idim];
 	}
 
-	PetscReal gcoords(const PetscInt ipoin, const int idim) const
+	PetscReal gcoords(const int idim, const PetscInt ipoin) const
 	{
 #if DEBUG == 1
 		if(idim >= NDIM) 
@@ -57,7 +57,7 @@ public:
 			return 0;
 		}
 #endif
-		return coords[ipoin][idim];
+		return coords[idim][ipoin];
 	}
 
 	PetscInt gnpointotal() const { return npointotal; }
