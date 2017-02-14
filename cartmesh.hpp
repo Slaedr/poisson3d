@@ -13,12 +13,18 @@ class CartMesh
 	const PetscInt npoind[NDIM];	///< Array storing the number of points on each coordinate axis
 	PetscReal ** coords;			///< Stores an array for each of the 3 axes - coords[i][j] refers to the j-th node along the i-axis
 	PetscInt npointotal;			///< Total number of points in the grid
+	PetscInt ninpoin;				///< Number of internal (non-boundary) points
 public:
 	CartMesh(const PetscInt npdim[NDIM]) : npoind(npdim)
 	{
 		npointotal = 1;
 		for(int i = 0; i < NDIM; i++)
 			npointotal *= npoind[i];
+
+		PetscInt nbpoints = npoind[0]*npoind[1]*2 + (npoind[2]-2)*npoind[0]*2 + (npoind[1]-2)*(npoind[2]-2)*2;
+		ninpoin = npointotal-nbpoints;
+
+		printf("CartMesh: Total points = %d, interior points = %d\n", npointotal, ninpoin);
 
 		coords = std::malloc(NDIM*sizeof(PetscReal*));
 		for(int i = 0; i < NDIM; i++)
@@ -61,6 +67,7 @@ public:
 	}
 
 	PetscInt gnpointotal() const { return npointotal; }
+	PetscInt gninpoin() const { return ninpoin; }
 
 	const PetscInt *const pointer_npoind() const
 	{
