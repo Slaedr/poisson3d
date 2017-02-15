@@ -22,16 +22,17 @@ inline PetscInt getFlattenedInteriorIndex(const CartMesh *const m, const PetscIn
 	return i-1 + (m->gnpoind(0)-2)*(j-1) + (m->gnpoind(0)-2)*(m->gnpoind(1)-2)*(k-1);
 }
 
-/// Set RHS = 3sin(x)sin(y)sin(z) for u_exact = sin(x)sin(y)sin(z)
+/// Set RHS = 12*pi^2*sin(2pi*x)sin(2pi*y)sin(2pi*z) for u_exact = sin(2pi*x)sin(2pi*y)sin(2pi*z)
 /** Note that the values are only set for interior points.
  * \param f is the rhs vector
  * \param uexact is the exact solution
  */
 void computeRHS(const CartMesh *const m, Vec f, Vec uexact)
 {
+	printf("ComputeRHS: Starting\n");
 	PetscReal *valuesrhs = (PetscReal*)std::malloc(m->gninpoin()*sizeof(PetscReal));
 	PetscReal *valuesuexact = (PetscReal*)std::malloc(m->gninpoin()*sizeof(PetscReal));
-	PetscInt *indices = (PetscInt*)std::malloc(m->gnpointotal()*sizeof(PetscInt));
+	PetscInt *indices = (PetscInt*)std::malloc(m->gninpoin()*sizeof(PetscInt));
 
 	// point ordering index
 	PetscInt l = 0;
@@ -43,18 +44,19 @@ void computeRHS(const CartMesh *const m, Vec f, Vec uexact)
 			{
 				indices[l] = getFlattenedInteriorIndex(m,i,j,k);
 
-				valuesrhs[l] = 3.0*std::sin(m->gcoords(i,0))*std::sin(m->gcoords(j,1))*std::sin(m->gcoords(k,2));
-				valuesuexact[l] = std::sin(m->gcoords(i,0))*std::sin(m->gcoords(j,1))*std::sin(m->gcoords(k,2));
+				valuesrhs[l] = 12.0*PI*PI*std::sin(2*PI*m->gcoords(i,0))*std::sin(2*PI*m->gcoords(j,1))*std::sin(2*PI*m->gcoords(k,2));
+				valuesuexact[l] = std::sin(2*PI*m->gcoords(i,0))*std::sin(2*PI*m->gcoords(j,1))*std::sin(2*PI*m->gcoords(k,2));
 
 				l++;
 			}
 
-	VecSetValues(f, m->gnpointotal(), indices, valuesrhs, INSERT_VALUES);
-	VecSetValues(uexact, m->gnpointotal(), indices, valuesuexact, INSERT_VALUES);
+	VecSetValues(f, m->gninpoin(), indices, valuesrhs, INSERT_VALUES);
+	VecSetValues(uexact, m->gninpoin(), indices, valuesuexact, INSERT_VALUES);
 
 	std::free(valuesrhs);
 	std::free(valuesuexact);
 	std::free(indices);
+	printf("ComputeRHS: Done\n");
 }
 
 /// Set stiffness matrix corresponding to interior points
@@ -62,12 +64,8 @@ void computeRHS(const CartMesh *const m, Vec f, Vec uexact)
  */
 void computeLHS(const CartMesh *const m, Mat A)
 {
-	/*PetscReal values[NSTENCIL];
-	PetscInt cindices[NSTENCIL];
-	PetscInt rindices[1];
-	PetscInt n = NSTENCIL;
-	PetscInt mm = 1;*/
-	
+	printf("ComputeLHS: For interior nodes...\n");
+
 	// nodes that don't have a Dirichlet node as a neighbor
 	for(PetscInt k = 2; k < m->gnpoind(2)-2; k++)
 		for(PetscInt j = 2; j < m->gnpoind(1)-2; j++)
@@ -105,6 +103,7 @@ void computeLHS(const CartMesh *const m, Mat A)
 			}
 
 	// next, nodes with Dirichlet nodes as neighbors
+	printf("ComputeLHS: For boundary nodes...\n");
 	
 	PetscInt k = 1;
 	for(PetscInt j = 1; j < m->gnpoind(1)-1; j++)
@@ -367,7 +366,7 @@ void computeLHS(const CartMesh *const m, Mat A)
 
 		} // end loop
 	
-	k = m->gnpoind(2)-1;
+	k = m->gnpoind(2)-2;
 	for(PetscInt j = 1; j < m->gnpoind(1)-1; j++)
 		for(PetscInt i = 1; i < m->gnpoind(0)-1; i++)
 		{
@@ -627,6 +626,7 @@ void computeLHS(const CartMesh *const m, Mat A)
 			}
 
 		} // end loop
+	printf("ComputeLHS: Done.\n");
 }
 
 //#undef __FUNCT__
@@ -697,6 +697,7 @@ int main(int argc, char* argv[])
 	VecAssemblyEnd(b);
 
 	// set up solver
+	ierr = KSPCreate(PETSC_COMM_SELF, &ksp);
 	ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
 	ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
 	
@@ -711,6 +712,7 @@ int main(int argc, char* argv[])
 	VecNorm(err,NORM_2,&errnorm);
 	printf("log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));
 
+	KSPDestroy(&ksp);
 	VecDestroy(&u);
 	VecDestroy(&uexact);
 	VecDestroy(&b);
