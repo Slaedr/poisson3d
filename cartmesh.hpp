@@ -10,13 +10,17 @@
  */
 class CartMesh
 {
-	const PetscInt npoind[NDIM];	///< Array storing the number of points on each coordinate axis
+	PetscInt npoind[NDIM];	///< Array storing the number of points on each coordinate axis
 	PetscReal ** coords;			///< Stores an array for each of the 3 axes - coords[i][j] refers to the j-th node along the i-axis
 	PetscInt npointotal;			///< Total number of points in the grid
 	PetscInt ninpoin;				///< Number of internal (non-boundary) points
+	PetscReal h;					///< Mesh size parameter
 public:
-	CartMesh(const PetscInt npdim[NDIM]) : npoind(npdim)
+	CartMesh(const PetscInt npdim[NDIM])
 	{
+		for(int i = 0; i < NDIM; i++)
+			npoind[i] = npdim[i];
+		
 		npointotal = 1;
 		for(int i = 0; i < NDIM; i++)
 			npointotal *= npoind[i];
@@ -24,18 +28,18 @@ public:
 		PetscInt nbpoints = npoind[0]*npoind[1]*2 + (npoind[2]-2)*npoind[0]*2 + (npoind[1]-2)*(npoind[2]-2)*2;
 		ninpoin = npointotal-nbpoints;
 
-		printf("CartMesh: Total points = %d, interior points = %d\n", npointotal, ninpoin);
+		std::printf("CartMesh: Total points = %d, interior points = %d\n", npointotal, ninpoin);
 
-		coords = std::malloc(NDIM*sizeof(PetscReal*));
+		coords = (PetscReal**)std::malloc(NDIM*sizeof(PetscReal*));
 		for(int i = 0; i < NDIM; i++)
-			coords[i] = std::malloc(npoind[i]*sizeof(PetscReal));
+			coords[i] = (PetscReal*)std::malloc(npoind[i]*sizeof(PetscReal));
 	}
 
 	~CartMesh()
 	{
 		for(int i = 0; i < NDIM; i++)
-			free(coords[i]);
-		free(coords);
+			std::free(coords[i]);
+		std::free(coords);
 	}
 
 	PetscInt gnpoind(const int idim) const
@@ -68,6 +72,7 @@ public:
 
 	PetscInt gnpointotal() const { return npointotal; }
 	PetscInt gninpoin() const { return ninpoin; }
+	PetscReal gh() const { return h; }
 
 	const PetscInt *const pointer_npoind() const
 	{
@@ -92,6 +97,30 @@ public:
 			for(int i = 0; i < npoind[idim]; i++)
 				coords[idim][i] = (rmax[idim]+rmin[idim])*0.5 + (rmax[idim]-rmin[idim])*0.5*std::cos(PI-i*theta);
 		}
+
+		// estimate h
+		h = 0.0;
+		PetscReal hd[NDIM];
+		for(int k = 0; k < npoind[2]-1; k++)
+		{
+			hd[2] = coords[2][k+1]-coords[2][k];
+			for(int j = 0; j < npoind[1]-1; j++)
+			{
+				hd[1] = coords[1][j+1]-coords[1][j];
+				for(int i = 0; i < npoind[0]-1; i++)
+				{
+					hd[0] = coords[0][i+1]-coords[0][i];
+					PetscReal diam = 0;
+					for(int idim = 0; idim < NDIM; idim++)
+						diam += hd[idim]*hd[idim];
+					diam = std::sqrt(diam);
+					if(diam > h)
+						h = diam;
+				}
+			}
+		}
 	}
 
 };
+
+#endif

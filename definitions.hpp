@@ -1,8 +1,9 @@
 #ifndef __DEFINITIONS_H
 #define __DEFINITIONS_H
 
-#include <petscvec.h>
-#include <petscmat.h>
+//#include <petscvec.h>
+//#include <petscmat.h>
+#include <petscksp.h>
 
 #include <cstdio>
 #include <cstdlib>

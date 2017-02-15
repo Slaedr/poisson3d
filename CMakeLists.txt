@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 2.8)
 
 project (poisson3d)
 
+# Variables to be passed to cmake:
+# CMAKE_BUILD_TYPE ('Debug' or 'Release')
+# PETSC_DIR (directory)
+# PETSC_ARCH (string)
+# OMP (bool)
+
 # to compile with OpenMP
 if(OMP)
 	message(STATUS "Compiling with OpenMP")
@@ -21,6 +27,11 @@ elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 endif()
 
+# PETSc
+#list(APPEND CMAKE_LIBRARY_PATH $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/lib)
+#list(APPEND CMAKE_INCLUDE_PATH $ENV{PETSC_DIR}/include :$ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/include)
+find_library(PETSC_LIB NAMES petsc PATHS $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/lib)
+
 # ---------------------------------------------------------------------------- #
 
 # flags and stuff
@@ -34,10 +45,11 @@ else()
 	message(STATUS "Release mode")
 endif()
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+#include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories($ENV{PETSC_DIR}/include $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/include)
 
-set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+#set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
+#set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 
 # libraries to be compiled
 
@@ -45,3 +57,4 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 #target_link_libraries(fvens_explicit fvens_base)
 
 add_executable(poisson3d poisson3d.cpp)
+target_link_libraries(poisson3d ${PETSC_LIB})
