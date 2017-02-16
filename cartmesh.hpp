@@ -18,8 +18,12 @@ class CartMesh
 public:
 	CartMesh(const PetscInt npdim[NDIM])
 	{
-		for(int i = 0; i < NDIM; i++)
+		std::printf("CartMesh: Number of points in each direction: ");
+		for(int i = 0; i < NDIM; i++) {
 			npoind[i] = npdim[i];
+			std::printf("%d ", npoind[i]);
+		}
+		std::printf("\n");
 		
 		npointotal = 1;
 		for(int i = 0; i < NDIM; i++)
@@ -46,7 +50,7 @@ public:
 	{
 #if DEBUG == 1
 		if(idim >= NDIM) {
-			std::printf("! Cartmesh: gnpoindim(): Invalid dimension!\n");
+			std::printf("! Cartmesh: gnpoind(): Invalid dimension %d!\n", idim);
 			return 0;
 		}
 #endif
@@ -58,12 +62,12 @@ public:
 #if DEBUG == 1
 		if(idim >= NDIM) 
 		{
-			std::printf("! Cartmesh: gnpoindim(): Invalid dimension!\n");
+			std::printf("! Cartmesh: gcoords(): Invalid dimension!\n");
 			return 0;
 		}
 		if(ipoin >= npoind[idim]) 
 		{
-			std::printf("! Cartmesh: gnpoindim(): Point does not exist!\n");
+			std::printf("! Cartmesh: gcoords(): Point does not exist!\n");
 			return 0;
 		}
 #endif
@@ -91,11 +95,15 @@ public:
 	 */
 	void generateMesh_ChebyshevDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM])
 	{
+		std::printf("CartMesh: generateMesh_cheb: Points are\n");
 		for(int idim = 0; idim < NDIM; idim++)
 		{
 			PetscReal theta = PI/(npoind[idim]-1);
-			for(int i = 0; i < npoind[idim]; i++)
+			for(int i = 0; i < npoind[idim]; i++) {
 				coords[idim][i] = (rmax[idim]+rmin[idim])*0.5 + (rmax[idim]-rmin[idim])*0.5*std::cos(PI-i*theta);
+				printf("%f ", coords[idim][i]);
+			}
+			printf("\n");
 		}
 
 		// estimate h
@@ -119,6 +127,43 @@ public:
 				}
 			}
 		}
+		std::printf("CartMesh: generateMesh_Cheb: h = %f\n", h);
+	}
+	
+	void generateMesh_UniformDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM])
+	{
+		std::printf("CartMesh: generateMesh_Uniform: Points are\n");
+		for(int idim = 0; idim < NDIM; idim++)
+		{
+			for(int i = 0; i < npoind[idim]; i++) {
+				coords[idim][i] = rmin[i] + (rmax[i]-rmin[i])*i/(npoind[i]-1);
+				printf("%f ", coords[idim][i]);
+			}
+			printf("\n");
+		}
+
+		// estimate h
+		h = 0.0;
+		PetscReal hd[NDIM];
+		for(int k = 0; k < npoind[2]-1; k++)
+		{
+			hd[2] = coords[2][k+1]-coords[2][k];
+			for(int j = 0; j < npoind[1]-1; j++)
+			{
+				hd[1] = coords[1][j+1]-coords[1][j];
+				for(int i = 0; i < npoind[0]-1; i++)
+				{
+					hd[0] = coords[0][i+1]-coords[0][i];
+					PetscReal diam = 0;
+					for(int idim = 0; idim < NDIM; idim++)
+						diam += hd[idim]*hd[idim];
+					diam = std::sqrt(diam);
+					if(diam > h)
+						h = diam;
+				}
+			}
+		}
+		std::printf("CartMesh: generateMesh_Uniform: h = %f\n", h);
 	}
 
 };

@@ -44,8 +44,8 @@ void computeRHS(const CartMesh *const m, Vec f, Vec uexact)
 			{
 				indices[l] = getFlattenedInteriorIndex(m,i,j,k);
 
-				valuesrhs[l] = 12.0*PI*PI*std::sin(2*PI*m->gcoords(i,0))*std::sin(2*PI*m->gcoords(j,1))*std::sin(2*PI*m->gcoords(k,2));
-				valuesuexact[l] = std::sin(2*PI*m->gcoords(i,0))*std::sin(2*PI*m->gcoords(j,1))*std::sin(2*PI*m->gcoords(k,2));
+				valuesrhs[l] = 12.0*PI*PI*std::sin(2*PI*m->gcoords(0,i))*std::sin(2*PI*m->gcoords(1,j))*std::sin(2*PI*m->gcoords(2,k));
+				valuesuexact[l] = std::sin(2*PI*m->gcoords(0,i))*std::sin(2*PI*m->gcoords(1,j))*std::sin(2*PI*m->gcoords(2,k));
 
 				l++;
 			}
@@ -667,9 +667,15 @@ int main(int argc, char* argv[])
 		fscanf(conf, "%lf", &rmax[i]);
 	fclose(conf);
 
+	printf("Domain boundaries in each dimension:\n");
+	for(int i = 0; i < NDIM; i++)
+		printf("%f %f ", rmin[i], rmax[i]);
+	printf("\n");
+
 	// generate mesh
 	CartMesh m(npdim);
-	m.generateMesh_ChebyshevDistribution(rmin,rmax);
+	//m.generateMesh_ChebyshevDistribution(rmin,rmax);
+	m.generateMesh_UniformDistribution(rmin,rmax);
 
 	// set up Petsc variables
 	Vec u, uexact, b, err;
