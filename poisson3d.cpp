@@ -9,17 +9,19 @@ inline PetscInt getFlattenedIndex(const CartMesh *const m, const PetscInt i, con
 }
 
 /// Gives the index of a point in the point grid collapsed to 1D, assuming boundary points don't exist
-/** Make sure there's at least one interior point, or Bad Things (TM) may happen.
+/** Returns -1 when passed a boundary point.
+ * Make sure there's at least one interior point, or Bad Things (TM) may happen.
  */
 inline PetscInt getFlattenedInteriorIndex(const CartMesh *const m, const PetscInt i, const PetscInt j, const PetscInt k)
 {
-#if DEBUG==1
+	PetscInt retval = i-1 + (m->gnpoind(0)-2)*(j-1) + (m->gnpoind(0)-2)*(m->gnpoind(1)-2)*(k-1);
 	if(i == 0 || i == m->gnpoind(0)-1 || j == 0 || j == m->gnpoind(1)-1 || k == 0 || k == m->gnpoind(2)-1) {
-		std::printf("! getFlattenedInteriorIndex(): Invalid i, j, or k index!\n");
-		return 0;
-	}
+#if DEBUG==1
+		//std::printf("getFlattenedInteriorIndex(): i, j, or k index corresponds to boundary node! Flattened index = %d, returning -1\n", retval);
 #endif
-	return i-1 + (m->gnpoind(0)-2)*(j-1) + (m->gnpoind(0)-2)*(m->gnpoind(1)-2)*(k-1);
+		return -1;
+	}
+	return retval;
 }
 
 /// Set RHS = 12*pi^2*sin(2pi*x)sin(2pi*y)sin(2pi*z) for u_exact = sin(2pi*x)sin(2pi*y)sin(2pi*z)
@@ -66,10 +68,9 @@ void computeLHS(const CartMesh *const m, Mat A)
 {
 	printf("ComputeLHS: For interior nodes...\n");
 
-	// nodes that don't have a Dirichlet node as a neighbor
-	for(PetscInt k = 2; k < m->gnpoind(2)-2; k++)
-		for(PetscInt j = 2; j < m->gnpoind(1)-2; j++)
-			for(PetscInt i = 2; i < m->gnpoind(0)-2; i++)
+	for(PetscInt k = 1; k < m->gnpoind(2)-1; k++)
+		for(PetscInt j = 1; j < m->gnpoind(1)-1; j++)
+			for(PetscInt i = 1; i < m->gnpoind(0)-1; i++)
 			{
 				PetscReal values[NSTENCIL];
 				PetscInt cindices[NSTENCIL];
@@ -85,548 +86,47 @@ void computeLHS(const CartMesh *const m, Mat A)
 				cindices[3] = rindices[0];
 				cindices[4] = getFlattenedInteriorIndex(m,i+1,j,k);
 				cindices[5] = getFlattenedInteriorIndex(m,i,j+1,k);
-				cindices[7] = getFlattenedInteriorIndex(m,i,j,k+1);
+				cindices[6] = getFlattenedInteriorIndex(m,i,j,k+1);
 				
 				values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
 				values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
 				values[2] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
 
-				values[3] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-				values[3] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-				values[3] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
+				values[3] =  2.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
+				values[3] += 2.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
+				values[3] += 2.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
 
 				values[4] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
 				values[5] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
 				values[6] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
 
 				MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
+				//printf("\tProcessed index %d, diag value = %f\n", rindices[0], values[3]);
 			}
 
-	// next, nodes with Dirichlet nodes as neighbors
-	printf("ComputeLHS: For boundary nodes...\n");
-	
-	PetscInt k = 1;
-	for(PetscInt j = 1; j < m->gnpoind(1)-1; j++)
-		for(PetscInt i = 1; i < m->gnpoind(0)-1; i++)
-		{
-			if(j == 1)
-			{
-				if(i == 1)
-				{
-					PetscReal values[NSTENCIL-3];
-					PetscInt cindices[NSTENCIL-3];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-3;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = rindices[0];
-					cindices[1] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[2] = getFlattenedInteriorIndex(m,i,j+1,k);
-					cindices[3] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[0] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[0] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[1] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[2] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[3] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else if(i == m->gnpoind(0)-2)
-				{
-					PetscReal values[NSTENCIL-3];
-					PetscInt cindices[NSTENCIL-3];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-3;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = rindices[0];
-					cindices[2] = getFlattenedInteriorIndex(m,i,j+1,k);
-					cindices[3] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-
-					values[1] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[1] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[1] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[2] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[3] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else
-				{
-					PetscReal values[NSTENCIL-2];
-					PetscInt cindices[NSTENCIL-2];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-2;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = rindices[0];
-					cindices[2] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[3] = getFlattenedInteriorIndex(m,i,j+1,k);
-					cindices[4] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-
-					values[1] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[1] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[1] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[2] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[3] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[4] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-			}
-			else if(j == m->gnpoind(1)-2)
-			{
-				if(i == 1)
-				{
-					PetscReal values[NSTENCIL-3];
-					PetscInt cindices[NSTENCIL-3];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-3;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[1] = rindices[0];
-					cindices[2] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[3] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					values[1] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[1] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[1] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[2] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[3] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else if(i == m->gnpoind(0)-2)
-				{
-					PetscReal values[NSTENCIL-3];
-					PetscInt cindices[NSTENCIL-3];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-3;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[2] = rindices[0];
-					cindices[3] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					values[2] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[2] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[2] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[3] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else
-				{
-					PetscReal values[NSTENCIL-2];
-					PetscInt cindices[NSTENCIL-2];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-2;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[2] = rindices[0];
-					cindices[3] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[4] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					values[2] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[2] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[2] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[3] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[4] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-			}
-			else
-			{
-				if(i == 1)
-				{
-					PetscReal values[NSTENCIL-2];
-					PetscInt cindices[NSTENCIL-2];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-2;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[1] = rindices[0];
-					cindices[2] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[3] = getFlattenedInteriorIndex(m,i,j+1,k);
-					cindices[4] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					values[1] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[1] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[1] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[2] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[3] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[4] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else if(i == m->gnpoind(0)-2)
-				{
-					PetscReal values[NSTENCIL-2];
-					PetscInt cindices[NSTENCIL-2];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-2;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[2] = rindices[0];
-					cindices[3] = getFlattenedInteriorIndex(m,i,j+1,k);
-					cindices[4] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					values[2] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[2] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[2] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[3] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[4] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else
-				{
-					PetscReal values[NSTENCIL-1];
-					PetscInt cindices[NSTENCIL-1];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-1;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[2] = rindices[0];
-					cindices[3] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[4] = getFlattenedInteriorIndex(m,i,j+1,k);
-					cindices[5] = getFlattenedInteriorIndex(m,i,j,k+1);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					values[2] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[2] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[2] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[3] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[4] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[5] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-			}
-
-		} // end loop
-	
-	k = m->gnpoind(2)-2;
-	for(PetscInt j = 1; j < m->gnpoind(1)-1; j++)
-		for(PetscInt i = 1; i < m->gnpoind(0)-1; i++)
-		{
-			if(j == 1)
-			{
-				if(i == 1)
-				{
-					PetscReal values[NSTENCIL-3];
-					PetscInt cindices[NSTENCIL-3];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-3;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[1] = rindices[0];
-					cindices[2] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[3] = getFlattenedInteriorIndex(m,i,j+1,k);
-					
-					values[0] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[1] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[1] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[1] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[2] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[3] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else if(i == m->gnpoind(0)-2)
-				{
-					PetscReal values[NSTENCIL-3];
-					PetscInt cindices[NSTENCIL-3];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-3;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[2] = rindices[0];
-					cindices[3] = getFlattenedInteriorIndex(m,i,j+1,k);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[2] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[2] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[2] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[3] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else
-				{
-					PetscReal values[NSTENCIL-2];
-					PetscInt cindices[NSTENCIL-2];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-2;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[2] = rindices[0];
-					cindices[3] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[4] = getFlattenedInteriorIndex(m,i,j+1,k);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[2] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[2] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[2] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[3] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[4] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-			}
-			else if(j == m->gnpoind(1)-2)
-			{
-				if(i == 1)
-				{
-					PetscReal values[NSTENCIL-3];
-					PetscInt cindices[NSTENCIL-3];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-3;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[2] = rindices[0];
-					cindices[3] = getFlattenedInteriorIndex(m,i+1,j,k);
-					
-					values[0] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[1] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[2] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[2] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[2] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[3] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else if(i == m->gnpoind(0)-2)
-				{
-					PetscReal values[NSTENCIL-3];
-					PetscInt cindices[NSTENCIL-3];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-3;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[2] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[3] = rindices[0];
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[2] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[3] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[3] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[3] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else
-				{
-					PetscReal values[NSTENCIL-2];
-					PetscInt cindices[NSTENCIL-2];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-2;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[2] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[3] = rindices[0];
-					cindices[4] = getFlattenedInteriorIndex(m,i+1,j,k);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[2] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[3] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[3] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[3] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[4] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-			}
-			else
-			{
-				if(i == 1)
-				{
-					PetscReal values[NSTENCIL-2];
-					PetscInt cindices[NSTENCIL-2];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-2;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[2] = rindices[0];
-					cindices[3] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[4] = getFlattenedInteriorIndex(m,i,j+1,k);
-					
-					values[0] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[1] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[2] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[2] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[2] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[3] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[4] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else if(i == m->gnpoind(0)-2)
-				{
-					PetscReal values[NSTENCIL-2];
-					PetscInt cindices[NSTENCIL-2];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-2;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[2] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[3] = rindices[0];
-					cindices[4] = getFlattenedInteriorIndex(m,i,j+1,k);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[2] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[3] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[3] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[3] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[4] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-				else
-				{
-					PetscReal values[NSTENCIL-1];
-					PetscInt cindices[NSTENCIL-1];
-					PetscInt rindices[1];
-					PetscInt n = NSTENCIL-1;
-					PetscInt mm = 1;
-					
-					rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
-
-					cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-					cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-					cindices[2] = getFlattenedInteriorIndex(m,i,j,k-1);
-					cindices[3] = rindices[0];
-					cindices[4] = getFlattenedInteriorIndex(m,i+1,j,k);
-					cindices[5] = getFlattenedInteriorIndex(m,i,j+1,k);
-					
-					values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-					values[2] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
-
-					values[3] =  1.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-					values[3] += 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-					values[3] += 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
-
-					values[4] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-					values[5] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-
-					MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				}
-			}
-
-		} // end loop
 	printf("ComputeLHS: Done.\n");
+}
+
+/// Computes L2 norm of a mesh function v, assuming piecewise constant values in a dual cell around each node.
+PetscReal computeNorm(Vec v, const CartMesh *const m)
+{
+	PetscInt sz;
+	PetscReal * vals, norm = 0;
+
+	VecGetArray(v, &vals);
+	VecGetLocalSize(v, &sz);
+
+	for(int k = 1; k < m->gnpoind(2)-1; k++)
+		for(int j = 1; j < m->gnpoind(1)-1; j++)
+			for(int i = 1; i < m->gnpoind(0)-1; i++)
+			{
+				PetscReal vol = 1.0/8.0*(m->gcoords(0,i+1)-m->gcoords(0,i-1))*(m->gcoords(1,j+1)-m->gcoords(1,j-1))*(m->gcoords(2,k+1)-m->gcoords(2,k-1));
+				PetscInt ind = getFlattenedInteriorIndex(m,i,j,k);
+				norm += vals[ind]*vals[ind]*vol;
+			}
+
+	VecRestoreArray(v, &vals);
+	return norm;
 }
 
 //#undef __FUNCT__
@@ -654,8 +154,10 @@ int main(int argc, char* argv[])
 	// Read control file
 	PetscInt npdim[NDIM];
 	PetscReal rmax[NDIM], rmin[NDIM];
-	char temp[50];
+	char temp[50], gridtype[50];
 	FILE* conf = fopen(confile, "r");
+	fscanf(conf, "%s", temp);
+	fscanf(conf, "%s", gridtype);
 	fscanf(conf, "%s", temp);
 	for(int i = 0; i < NDIM; i++)
 		fscanf(conf, "%d", &npdim[i]);
@@ -674,8 +176,10 @@ int main(int argc, char* argv[])
 
 	// generate mesh
 	CartMesh m(npdim);
-	//m.generateMesh_ChebyshevDistribution(rmin,rmax);
-	m.generateMesh_UniformDistribution(rmin,rmax);
+	if(!strcmp(gridtype, "chebyshev"))
+		m.generateMesh_ChebyshevDistribution(rmin,rmax);
+	else
+		m.generateMesh_UniformDistribution(rmin,rmax);
 
 	// set up Petsc variables
 	Vec u, uexact, b, err;
@@ -694,28 +198,49 @@ int main(int argc, char* argv[])
 	computeLHS(&m, A);
 
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
-	VecAssemblyBegin(u);
 	VecAssemblyBegin(uexact);
 	VecAssemblyBegin(b);
 	MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
-	VecAssemblyEnd(u);
 	VecAssemblyEnd(uexact);
 	VecAssemblyEnd(b);
+
+	/*printf("Assembled RHS vector:\n");
+	VecView(b, 0);
+	printf("Assembled LHS matrix:\n");
+	MatView(A, 0);*/
 
 	// set up solver
 	ierr = KSPCreate(PETSC_COMM_SELF, &ksp);
 	ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
+	KSPSetType(ksp, KSPPREONLY);
+	KSPSetTolerances(ksp, 1e-5, PETSC_DEFAULT, PETSC_DEFAULT, 100);
+	KSPGetPC(ksp, &pc);
+	PCSetType(pc, PCSOR);
+	PCSORSetOmega(pc,1.0);
+	PCSORSetIterations(pc, 1, 10);
+	ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
 	ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
+
+
+	/*PetscInt iter; PetscReal rnor; PetscViewer viewer;
+	PetscViewerAndFormatCreate(viewer, PETSC_VIEWER_ASCII_COMMON, &vf);
+	KSPMonitorDefault(ksp, iter, rnor, vf);*/
 	
 	ierr = KSPSolve(ksp, b, u);
+	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_SELF);CHKERRQ(ierr);		// change SELF to WORLD for multiprocessor
 
 	// post-process
-	int kspiters; PetscReal errnorm;
+	int kspiters; PetscReal errnorm, rnorm;
 	KSPGetIterationNumber(ksp, &kspiters);
+	printf("Number of KSP iterations = %d\n", kspiters);
+	KSPGetResidualNorm(ksp, &rnorm);
+	printf("KSP residual norm = %f\n", rnorm);
 	
 	VecCopy(u,err);
 	VecAXPY(err, -1.0, uexact);
-	VecNorm(err,NORM_2,&errnorm);
+	//VecNorm(err,NORM_2,&errnorm);
+	errnorm = computeNorm(err,&m);
+	printf("h and error: %f  %f\n", m.gh(), errnorm);
 	printf("log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));
 
 	KSPDestroy(&ksp);
