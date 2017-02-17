@@ -210,9 +210,15 @@ int main(int argc, char* argv[])
 	MatView(A, 0);*/
 
 	// set up solver
+	/** Note that the Richardson solver with preconditioner is nothing but the preconditioner applied iteratively in
+	 * approximate factorization (which I also call error correction) form.
+	 * Without preconditioner, it is $ \Delta x^k = r^k $ where r is the residual.
+	 * In PETSc, it is actually a "modified" Richardson iteration: $ \Delta x^k = \omega r^k $ where omega is a relaxation parameter.
+	 */
 	ierr = KSPCreate(PETSC_COMM_SELF, &ksp);
 	ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
-	KSPSetType(ksp, KSPPREONLY);
+	KSPSetType(ksp, KSPRICHARDSON);
+	KSPRichardsonSetScale(ksp, 1.0);
 	KSPSetTolerances(ksp, 1e-5, PETSC_DEFAULT, PETSC_DEFAULT, 100);
 	KSPGetPC(ksp, &pc);
 	PCSetType(pc, PCSOR);
@@ -220,7 +226,6 @@ int main(int argc, char* argv[])
 	PCSORSetIterations(pc, 1, 10);
 	ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
 	ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
-
 
 	/*PetscInt iter; PetscReal rnor; PetscViewer viewer;
 	PetscViewerAndFormatCreate(viewer, PETSC_VIEWER_ASCII_COMMON, &vf);
@@ -238,7 +243,6 @@ int main(int argc, char* argv[])
 	
 	VecCopy(u,err);
 	VecAXPY(err, -1.0, uexact);
-	//VecNorm(err,NORM_2,&errnorm);
 	errnorm = computeNorm(err,&m);
 	printf("h and error: %f  %f\n", m.gh(), errnorm);
 	printf("log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));

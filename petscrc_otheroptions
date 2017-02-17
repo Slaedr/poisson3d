@@ -1,0 +1,6 @@
+-pc_type sor
+-pc_sor_its 1
+-pc_sor_lits 10
+-pc_sor_local_symmetric
+
+-pc_type ilu

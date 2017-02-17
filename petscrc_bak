@@ -1,2 +1,0 @@
--ksp_type preonly -ksp_rtol 1e-5 -ksp_atol 1e-15 -ksp_max_it 500 -ksp_monitor -ksp_final_residual -pc_type sor -pc_sor_omega 1.0 -pc_sor_its 1 -pc_sor_symmetric -pc_sor_lits 5 -pc_sor_local_symmetric \
--mat_view ::ascii_info

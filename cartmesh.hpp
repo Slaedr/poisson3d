@@ -122,15 +122,12 @@ public:
 	void generateMesh_ChebyshevDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM])
 	{
 		std::printf("CartMesh: generateMesh_cheb: Generating grid\n");
-		std::printf("CartMesh: generateMesh_cheb: Points are\n");
 		for(int idim = 0; idim < NDIM; idim++)
 		{
 			PetscReal theta = PI/(npoind[idim]-1);
 			for(int i = 0; i < npoind[idim]; i++) {
 				coords[idim][i] = (rmax[idim]+rmin[idim])*0.5 + (rmax[idim]-rmin[idim])*0.5*std::cos(PI-i*theta);
-				printf("%f ", coords[idim][i]);
 			}
-			printf("\n");
 		}
 
 		// estimate h
@@ -142,14 +139,11 @@ public:
 	void generateMesh_UniformDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM])
 	{
 		std::printf("CartMesh: generateMesh_Uniform: Generating grid\n");
-		std::printf("CartMesh: generateMesh_Uniform: Points are\n");
 		for(int idim = 0; idim < NDIM; idim++)
 		{
 			for(int i = 0; i < npoind[idim]; i++) {
 				coords[idim][i] = rmin[idim] + (rmax[idim]-rmin[idim])*i/(npoind[idim]-1);
-				printf("%f ", coords[idim][i]);
 			}
-			printf("\n");
 		}
 
 		computeMeshSize();
