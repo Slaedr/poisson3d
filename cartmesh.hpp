@@ -10,12 +10,18 @@
  */
 class CartMesh
 {
-	PetscInt npoind[NDIM];	///< Array storing the number of points on each coordinate axis
+	PetscInt npoind[NDIM];			///< Array storing the number of points on each coordinate axis
 	PetscReal ** coords;			///< Stores an array for each of the 3 axes - coords[i][j] refers to the j-th node along the i-axis
 	PetscInt npointotal;			///< Total number of points in the grid
 	PetscInt ninpoin;				///< Number of internal (non-boundary) points
 	PetscReal h;					///< Mesh size parameter
+	PetscInt nparts;				///< Number of partitions
+	PetscInt * partkmin;			///< First k-index corresponding to each partition
+	PetscInt * partkmax;			///< One more than the last k-index corresponding to each partition
 
+	/// Computes the mesh size parameter h
+	/** Sets h as the length of the longest diagonal of all cells.
+	 */
 	void computeMeshSize()
 	{
 		// estimate h
@@ -42,7 +48,7 @@ class CartMesh
 	}
 
 public:
-	CartMesh(const PetscInt npdim[NDIM])
+	CartMesh(const PetscInt npdim[NDIM], const PetcInt num_partitions)
 	{
 		std::printf("CartMesh: Number of points in each direction: ");
 		for(int i = 0; i < NDIM; i++) {
@@ -50,6 +56,7 @@ public:
 			std::printf("%d ", npoind[i]);
 		}
 		std::printf("\n");
+		nparts = num_partitions;
 		
 		npointotal = 1;
 		for(int i = 0; i < NDIM; i++)
@@ -58,11 +65,16 @@ public:
 		PetscInt nbpoints = npoind[0]*npoind[1]*2 + (npoind[2]-2)*npoind[0]*2 + (npoind[1]-2)*(npoind[2]-2)*2;
 		ninpoin = npointotal-nbpoints;
 
-		std::printf("CartMesh: Total points = %d, interior points = %d\n", npointotal, ninpoin);
+		std::printf("CartMesh: Total points = %d, interior points = %d, number of partitions required = \n", npointotal, ninpoin, nparts);
 
 		coords = (PetscReal**)std::malloc(NDIM*sizeof(PetscReal*));
 		for(int i = 0; i < NDIM; i++)
 			coords[i] = (PetscReal*)std::malloc(npoind[i]*sizeof(PetscReal));
+
+		for(int i = 0; i < nparts; i++){
+			partkmin = (PetscInt*)std::malloc(nparts*sizeof(PetscInt));
+			partkmax = (PetscInt*)std::malloc(nparts*sizeof(PetscInt));
+		}
 	}
 
 	~CartMesh()
@@ -70,6 +82,23 @@ public:
 		for(int i = 0; i < NDIM; i++)
 			std::free(coords[i]);
 		std::free(coords);
+		for(int i = 0; i < nparts; i++) {
+			std::free(partkmin);
+			std::free(partkmax);
+		}
+	}
+
+	/// Partitions the grid into slices along the k-direction
+	void partitionAlongZ()
+	{
+		PetscInt npointsperpart = (npoind[2]-2)/nparts;
+		for(int ipart = 0; ipart < nparts; ipart++) {
+			partkmin[ipart] = 1+npointsperpart*ipart;
+			partkmax[ipart] = 1+npointsperpart*(ipart+1);
+		}
+
+		// the remainder is assigned to the last part
+		partkmax[nparts-1] = npoind[2]-1;
 	}
 
 	PetscInt gnpoind(const int idim) const

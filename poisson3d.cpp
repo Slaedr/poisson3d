@@ -1,3 +1,9 @@
+/** \file poisson3d.cpp
+ * \brief PETSc-based solver for Poisson Dirichlet problem on a Cartesian grid
+ *
+ * Note that only zero Dirichlet BCs are currently supported.
+ */
+
 #ifndef __CARTMESH_H
 #include "cartmesh.hpp"
 #endif
@@ -16,9 +22,7 @@ inline PetscInt getFlattenedInteriorIndex(const CartMesh *const m, const PetscIn
 {
 	PetscInt retval = i-1 + (m->gnpoind(0)-2)*(j-1) + (m->gnpoind(0)-2)*(m->gnpoind(1)-2)*(k-1);
 	if(i == 0 || i == m->gnpoind(0)-1 || j == 0 || j == m->gnpoind(1)-1 || k == 0 || k == m->gnpoind(2)-1) {
-#if DEBUG==1
-		//std::printf("getFlattenedInteriorIndex(): i, j, or k index corresponds to boundary node! Flattened index = %d, returning -1\n", retval);
-#endif
+		//std::printf("getFlattenedInteriorIndex(): i, j, or k index corresponds to boundary node. Flattened index = %d, returning -1\n", retval);
 		return -1;
 	}
 	return retval;
