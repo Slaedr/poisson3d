@@ -8,6 +8,12 @@
 #include "cartmesh.hpp"
 #endif
 
+#ifdef USE_HIPERSOLVER
+#ifndef __FGPILU_H
+#include <fgpilu.h>
+#endif
+#endif
+
 /// Gives the index of a point in the point grid collapsed to 1D
 inline PetscInt getFlattenedIndex(const CartMesh *const m, const PetscInt i, const PetscInt j, const PetscInt k)
 {
@@ -150,6 +156,11 @@ int main(int argc, char* argv[])
 	char * optfile = argv[2];
 	PetscMPIInt size;
 	PetscErrorCode ierr;
+	int nbsw, nasw; char fgpiluch, chtemp;
+#ifdef USE_HIPERSOLVER
+	H_ILU_data iluctrl;
+	printf("Hipersolver available.\n");
+#endif
 
 	ierr = PetscInitialize(&argc, &argv, optfile, help); CHKERRQ(ierr);
 	MPI_Comm_size(PETSC_COMM_WORLD,&size);
@@ -171,6 +182,12 @@ int main(int argc, char* argv[])
 	fscanf(conf, "%s", temp);
 	for(int i = 0; i < NDIM; i++)
 		fscanf(conf, "%lf", &rmax[i]);
+	fscanf(conf, "%s", temp); fscanf(conf, "%c", &chtemp); fscanf(conf, "%c", &fgpiluch);
+	printf("Use FGPILU? %c\n", fgpiluch);
+	if(fgpiluch=='y') {
+		fscanf(conf, "%s", temp); fscanf(conf, "%d", &nbsw);
+		fscanf(conf, "%s", temp); fscanf(conf, "%d", &nasw);
+	}
 	fclose(conf);
 
 	printf("Domain boundaries in each dimension:\n");
@@ -179,7 +196,7 @@ int main(int argc, char* argv[])
 	printf("\n");
 
 	// generate mesh
-	CartMesh m(npdim);
+	CartMesh m(npdim, 1);
 	if(!strcmp(gridtype, "chebyshev"))
 		m.generateMesh_ChebyshevDistribution(rmin,rmax);
 	else
@@ -225,11 +242,30 @@ int main(int argc, char* argv[])
 	KSPRichardsonSetScale(ksp, 1.0);
 	KSPSetTolerances(ksp, 1e-5, PETSC_DEFAULT, PETSC_DEFAULT, 100);
 	KSPGetPC(ksp, &pc);
-	PCSetType(pc, PCSOR);
-	PCSORSetOmega(pc,1.0);
-	PCSORSetIterations(pc, 1, 10);
-	ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
-	ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
+
+#ifdef USE_HIPERSOLVER
+	if(fgpiluch != 'y') {
+#endif
+		PCSetType(pc, PCSOR);
+		PCSORSetOmega(pc,1.0);
+		PCSORSetIterations(pc, 1, 10);
+		ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
+		ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
+#ifdef USE_HIPERSOLVER
+	}
+	else {
+		printf("Using FGPILU as preconditioner.\n");
+		PCSetType(pc, PCSHELL);
+		iluctrl.nbuildsweeps = nbsw;
+		iluctrl.napplysweeps = nasw;
+		iluctrl.setup = false;
+		PCShellSetContext(pc, &iluctrl);
+		PCShellSetSetUp(pc, &compute_fgpilu_local);
+		PCShellSetApply(pc, &apply_fgpilu_jacobi_local);
+		PCShellSetDestroy(pc, &cleanup_fgpilu);
+		PCShellSetName(pc, "FGPILU");
+	}
+#endif
 
 	/*PetscInt iter; PetscReal rnor; PetscViewer viewer;
 	PetscViewerAndFormatCreate(viewer, PETSC_VIEWER_ASCII_COMMON, &vf);

@@ -48,7 +48,7 @@ class CartMesh
 	}
 
 public:
-	CartMesh(const PetscInt npdim[NDIM], const PetcInt num_partitions)
+	CartMesh(const PetscInt npdim[NDIM], const PetscInt num_partitions)
 	{
 		std::printf("CartMesh: Number of points in each direction: ");
 		for(int i = 0; i < NDIM; i++) {
@@ -65,7 +65,7 @@ public:
 		PetscInt nbpoints = npoind[0]*npoind[1]*2 + (npoind[2]-2)*npoind[0]*2 + (npoind[1]-2)*(npoind[2]-2)*2;
 		ninpoin = npointotal-nbpoints;
 
-		std::printf("CartMesh: Total points = %d, interior points = %d, number of partitions required = \n", npointotal, ninpoin, nparts);
+		std::printf("CartMesh: Total points = %d, interior points = %d, number of partitions required = %d\n", npointotal, ninpoin, nparts);
 
 		coords = (PetscReal**)std::malloc(NDIM*sizeof(PetscReal*));
 		for(int i = 0; i < NDIM; i++)

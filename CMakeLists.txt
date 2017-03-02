@@ -12,6 +12,7 @@ project (poisson3d)
 if(OMP)
 	message(STATUS "Compiling with OpenMP")
 	if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+		message(STATUS "GNU compiler found.")
 		set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 	elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
 		set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -qopenmp")
@@ -22,15 +23,35 @@ endif()
 
 # set compile options
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+	message(STATUS "GNU or Clang compiler found.")
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ftree-vectorizer-verbose=2")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 endif()
 
 # PETSc
-#list(APPEND CMAKE_LIBRARY_PATH $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/lib)
-#list(APPEND CMAKE_INCLUDE_PATH $ENV{PETSC_DIR}/include :$ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/include)
 find_library(PETSC_LIB NAMES petsc PATHS $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/lib)
+include_directories($ENV{PETSC_DIR}/include $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/include)
+
+# Hipersolver
+#find_library(FGPILU_LIB NAMES fgpilu PATHS ${CMAKE_SOURCE_DIR}/../build)
+#find_library(SPARSEBLAS_LIB NAMES sparseblas PATHS ${CMAKE_SOURCE_DIR}/../build)
+#if("${FGPILU_LIB}" STREQUAL "FGPILU_LIB-NOTFOUND")
+#    message(STATUS "FGPILU library not found!")
+#lse()
+#   message(STATUS "FGPILU library found. Setting corresponding macro variable.")
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_FGPILU")
+#ndif()
+find_library(HIPERSOLVER_LIB NAMES hipersolver PATHS ${CMAKE_SOURCE_DIR}/../build)
+if("${HIPERSOLVER_LIB}" STREQUAL "HIPERSOLVER_LIB-NOTFOUND")
+    message(STATUS "Hipersolver library not found!")
+else()
+   message(STATUS "Hipersolver library found. Setting corresponding macro variable.")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HIPERSOLVER")
+endif()
+include_directories(${CMAKE_SOURCE_DIR}/../Hipersolver)
+
+message(STATUS "Hipersolver library = ${HIPERSOLVER_LIB}")
 
 # ---------------------------------------------------------------------------- #
 
@@ -45,16 +66,5 @@ else()
 	message(STATUS "Release mode")
 endif()
 
-#include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories($ENV{PETSC_DIR}/include $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/include)
-
-#set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
-#set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
-
-# libraries to be compiled
-
-#add_library(fvens_explicit aexplicitsolver.cpp)
-#target_link_libraries(fvens_explicit fvens_base)
-
 add_executable(poisson3d poisson3d.cpp)
-target_link_libraries(poisson3d ${PETSC_LIB})
+target_link_libraries(poisson3d ${PETSC_LIB} ${HIPERSOLVER_LIB})
