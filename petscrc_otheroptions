@@ -1,3 +1,5 @@
+-ksp_type richardson
+
 -pc_type sor
 -pc_sor_its 1
 -pc_sor_lits 10

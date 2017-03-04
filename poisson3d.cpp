@@ -204,7 +204,7 @@ int main(int argc, char* argv[])
 
 	// set up Petsc variables
 	Vec u, uexact, b, err;
-	Mat A;
+	Mat A, Ap;
 	KSP ksp; PC pc;
 
 	VecCreateSeq(PETSC_COMM_SELF, m.gninpoin(), &u);
@@ -225,6 +225,9 @@ int main(int argc, char* argv[])
 	VecAssemblyEnd(uexact);
 	VecAssemblyEnd(b);
 
+	// create a copy of A for the preconditioner
+	MatConvert(A, MATSAME, MAT_INITIAL_MATRIX, &Ap);
+
 	/*printf("Assembled RHS vector:\n");
 	VecView(b, 0);
 	printf("Assembled LHS matrix:\n");
@@ -237,8 +240,9 @@ int main(int argc, char* argv[])
 	 * In PETSc, it is actually a "modified" Richardson iteration: $ \Delta x^k = \omega r^k $ where omega is a relaxation parameter.
 	 */
 	ierr = KSPCreate(PETSC_COMM_SELF, &ksp);
-	ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
+	ierr = KSPSetOperators(ksp, A, Ap); CHKERRQ(ierr);
 	KSPSetType(ksp, KSPRICHARDSON);
+	//KSPSetType(ksp, KSPBCGS);
 	KSPRichardsonSetScale(ksp, 1.0);
 	KSPSetTolerances(ksp, 1e-5, PETSC_DEFAULT, PETSC_DEFAULT, 100);
 	KSPGetPC(ksp, &pc);
@@ -248,9 +252,8 @@ int main(int argc, char* argv[])
 #endif
 		PCSetType(pc, PCSOR);
 		PCSORSetOmega(pc,1.0);
-		PCSORSetIterations(pc, 1, 10);
+		PCSORSetIterations(pc, 1, 1);
 		ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
-		ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
 #ifdef USE_HIPERSOLVER
 	}
 	else {
@@ -260,12 +263,14 @@ int main(int argc, char* argv[])
 		iluctrl.napplysweeps = nasw;
 		iluctrl.setup = false;
 		PCShellSetContext(pc, &iluctrl);
-		PCShellSetSetUp(pc, &compute_fgpilu_local);
+		//PCShellSetSetUp(pc, &compute_fgpilu_local);
 		PCShellSetApply(pc, &apply_fgpilu_jacobi_local);
-		PCShellSetDestroy(pc, &cleanup_fgpilu);
+		//PCShellSetDestroy(pc, &cleanup_fgpilu);
 		PCShellSetName(pc, "FGPILU");
+		compute_fgpilu_local(pc);
 	}
 #endif
+	ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
 
 	/*PetscInt iter; PetscReal rnor; PetscViewer viewer;
 	PetscViewerAndFormatCreate(viewer, PETSC_VIEWER_ASCII_COMMON, &vf);
@@ -287,12 +292,17 @@ int main(int argc, char* argv[])
 	printf("h and error: %f  %f\n", m.gh(), errnorm);
 	printf("log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));
 
+#ifdef USE_HIPERSOLVER
+	if(fgpiluch == 'y')
+		cleanup_fgpilu(pc);
+#endif
 	KSPDestroy(&ksp);
 	VecDestroy(&u);
 	VecDestroy(&uexact);
 	VecDestroy(&b);
 	VecDestroy(&err);
 	MatDestroy(&A);
+	MatDestroy(&Ap);
 	PetscFinalize();
 	return 0;
 }
