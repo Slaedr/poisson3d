@@ -16,8 +16,9 @@ class CartMesh
 	PetscInt ninpoin;				///< Number of internal (non-boundary) points
 	PetscReal h;					///< Mesh size parameter
 	PetscInt nparts;				///< Number of partitions
-	PetscInt * partkmin;			///< First k-index corresponding to each partition
-	PetscInt * partkmax;			///< One more than the last k-index corresponding to each partition
+	PetscInt ** partmin;			///< In each direction, first index corresponding to each partition
+	PetscInt ** partmax;			///< In each direction, one more than the last index corresponding to each partition
+	PetscInt * npartpoin;			///< Number of points in each partition that are not on the global boundary
 
 	/// Computes the mesh size parameter h
 	/** Sets h as the length of the longest diagonal of all cells.
@@ -70,11 +71,6 @@ public:
 		coords = (PetscReal**)std::malloc(NDIM*sizeof(PetscReal*));
 		for(int i = 0; i < NDIM; i++)
 			coords[i] = (PetscReal*)std::malloc(npoind[i]*sizeof(PetscReal));
-
-		for(int i = 0; i < nparts; i++){
-			partkmin = (PetscInt*)std::malloc(nparts*sizeof(PetscInt));
-			partkmax = (PetscInt*)std::malloc(nparts*sizeof(PetscInt));
-		}
 	}
 
 	~CartMesh()
@@ -82,23 +78,6 @@ public:
 		for(int i = 0; i < NDIM; i++)
 			std::free(coords[i]);
 		std::free(coords);
-		for(int i = 0; i < nparts; i++) {
-			std::free(partkmin);
-			std::free(partkmax);
-		}
-	}
-
-	/// Partitions the grid into slices along the k-direction
-	void partitionAlongZ()
-	{
-		PetscInt npointsperpart = (npoind[2]-2)/nparts;
-		for(int ipart = 0; ipart < nparts; ipart++) {
-			partkmin[ipart] = 1+npointsperpart*ipart;
-			partkmax[ipart] = 1+npointsperpart*(ipart+1);
-		}
-
-		// the remainder is assigned to the last part
-		partkmax[nparts-1] = npoind[2]-1;
 	}
 
 	PetscInt gnpoind(const int idim) const

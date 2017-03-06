@@ -4,6 +4,7 @@
 //#include <petscvec.h>
 //#include <petscmat.h>
 #include <petscksp.h>
+#include <petscdmda.h>
 
 #include <cstdio>
 #include <cstdlib>
