@@ -164,7 +164,6 @@ int main(int argc, char* argv[])
 
 	ierr = PetscInitialize(&argc, &argv, optfile, help); CHKERRQ(ierr);
 	MPI_Comm_size(PETSC_COMM_WORLD,&size);
-	if (size != 1) SETERRQ(PETSC_COMM_SELF,1,"Currently single processor only!");
 
 	// Read control file
 	PetscInt npdim[NDIM];
@@ -203,17 +202,25 @@ int main(int argc, char* argv[])
 		m.generateMesh_UniformDistribution(rmin,rmax);
 
 	// set up Petsc variables
+	DM * da;					///< Distributed array context for the cart grid
+	PetscInt ndofpernode = 1;
+	PetscInt stencil_width = 1;
+	DMBoundaryType bx = DMDA_BOUNDARY_GHOST;
+	DMBoundaryType by = DMDA_BOUNDARY_GHOST;
+	DMBoundaryType bz = DMDA_BOUNDARY_GHOST;
+	DMDAStencilType stencil_type = DMDA_STENCIL_STAR;
+
 	Vec u, uexact, b, err;
 	Mat A, Ap;
 	KSP ksp; PC pc;
 
-	VecCreateSeq(PETSC_COMM_SELF, m.gninpoin(), &u);
+	DMCreateGlobalVector(da, &u);
 	VecDuplicate(u, &b);
 	VecDuplicate(u, &uexact);
 	VecDuplicate(u, &err);
 	VecSet(u, 0.0);
 
-	MatCreateSeqAIJ(PETSC_COMM_SELF, m.gninpoin(), m.gninpoin(), NSTENCIL, NULL, &A);
+	MatCreateSeqAIJ(PETSC_COMM_WORLD, m.gninpoin(), m.gninpoin(), NSTENCIL, NULL, &A);
 
 	computeRHS(&m, b, uexact);
 	computeLHS(&m, A);
@@ -303,6 +310,7 @@ int main(int argc, char* argv[])
 	VecDestroy(&err);
 	MatDestroy(&A);
 	MatDestroy(&Ap);
+	DMDestroy(&da);
 	PetscFinalize();
 	return 0;
 }

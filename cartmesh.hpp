@@ -110,6 +110,7 @@ public:
 
 	PetscInt gnpointotal() const { return npointotal; }
 	PetscInt gninpoin() const { return ninpoin; }
+	PetscInt gninpoinpart(const int ipart) const { return npartpoin[ipart]; }
 	PetscReal gh() const { return h; }
 
 	const PetscInt *const pointer_npoind() const
