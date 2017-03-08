@@ -57,7 +57,6 @@ public:
 			std::printf("%d ", npoind[i]);
 		}
 		std::printf("\n");
-		nparts = num_partitions;
 		
 		npointotal = 1;
 		for(int i = 0; i < NDIM; i++)
@@ -66,18 +65,24 @@ public:
 		PetscInt nbpoints = npoind[0]*npoind[1]*2 + (npoind[2]-2)*npoind[0]*2 + (npoind[1]-2)*(npoind[2]-2)*2;
 		ninpoin = npointotal-nbpoints;
 
-		std::printf("CartMesh: Total points = %d, interior points = %d, number of partitions required = %d\n", npointotal, ninpoin, nparts);
+		std::printf("CartMesh: Total points = %d, interior points = %d\n", npointotal, ninpoin);
 	}
 
-	CartMesh(const npdim[NDIM], PetscInt ndofpernode, PetscInt stencil_width,
-		DMBoundaryType bx, DMBoundaryType by, DMBoundaryType bz, DMDAStencilType stencil_type, DM da)
+	CartMesh(const PetscInt npdim[NDIM], PetscInt ndofpernode, PetscInt stencil_width,
+		DMBoundaryType bx, DMBoundaryType by, DMBoundaryType bz, DMDAStencilType stencil_type, DM *const dap, PetscMPIInt rank)
 	{
-		std::printf("CartMesh: Number of points in each direction: ");
 		for(int i = 0; i < NDIM; i++) {
 			npoind[i] = npdim[i];
-			std::printf("%d ", npoind[i]);
 		}
-		std::printf("\n");
+
+		if(rank == 0) {
+			std::printf("CartMesh: Number of points in each direction: ");
+			for(int i = 0; i < NDIM; i++) {
+				std::printf("%d ", npoind[i]);
+			}
+			std::printf("\n");
+		}
+
 		npointotal = 1;
 		for(int i = 0; i < NDIM; i++)
 			npointotal *= npoind[i];
@@ -85,12 +90,14 @@ public:
 		PetscInt nbpoints = npoind[0]*npoind[1]*2 + (npoind[2]-2)*npoind[0]*2 + (npoind[1]-2)*(npoind[2]-2)*2;
 		ninpoin = npointotal-nbpoints;
 
-		std::printf("CartMesh: Setting up DMDA\n");
-		DMDACreate3d(PETSC_COMM_WORLD, bx, by, bz, stencil_type, npoind[0]-2, npoind[1]-2, npoind[2]-2, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, ndofpernode, stencil_width, NULL, NULL, NULL, &da);
-		DMDAGetInfo(da, NULL, NULL, NULL, NULL, &nprocs[0], &nprocs[1], &nprocs[2], NULL, NULL, NULL, NULL, NULL, NULL);
+		if(rank == 0)
+			std::printf("CartMesh: Setting up DMDA\n");
+		DMDACreate3d(PETSC_COMM_WORLD, bx, by, bz, stencil_type, npoind[0]-2, npoind[1]-2, npoind[2]-2, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, ndofpernode, stencil_width, NULL, NULL, NULL, dap);
+		DMDAGetInfo(*dap, NULL, NULL, NULL, NULL, &nprocs[0], &nprocs[1], &nprocs[2], NULL, NULL, NULL, NULL, NULL, NULL);
 		ntprocs = nprocs[0]*nprocs[1]*nprocs[2];
 
-		std::printf("CartMesh: Total points = %d, interior points = %d, total number of partitions = %d\n", npointotal, ninpoin, ntprocs);
+		if(rank == 0)	
+			std::printf("CartMesh: Total points = %d, interior points = %d, total number of partitions = %d\n", npointotal, ninpoin, ntprocs);
 
 		// have each process store coords; hardly costs anything
 		coords = (PetscReal**)std::malloc(NDIM*sizeof(PetscReal*));
@@ -135,7 +142,6 @@ public:
 
 	PetscInt gnpointotal() const { return npointotal; }
 	PetscInt gninpoin() const { return ninpoin; }
-	PetscInt gninpoinpart(const int ipart) const { return npartpoin[ipart]; }
 	PetscReal gh() const { return h; }
 
 	const PetscInt *const pointer_npoind() const
@@ -153,9 +159,10 @@ public:
 	 * x_i = (a+b)/2 + (a-b)/2 * cos(pi - i*theta)
 	 * where theta = pi/(N-1)
 	 */
-	void generateMesh_ChebyshevDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM])
+	void generateMesh_ChebyshevDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM], PetscMPIInt rank)
 	{
-		std::printf("CartMesh: generateMesh_cheb: Generating grid\n");
+		if(rank == 0)
+			std::printf("CartMesh: generateMesh_cheb: Generating grid\n");
 		for(int idim = 0; idim < NDIM; idim++)
 		{
 			PetscReal theta = PI/(npoind[idim]-1);
@@ -166,13 +173,15 @@ public:
 
 		// estimate h
 		computeMeshSize();
-		std::printf("CartMesh: generateMesh_Cheb: h = %f\n", h);
+		if(rank == 0)
+			std::printf("CartMesh: generateMesh_Cheb: h = %f\n", h);
 	}
 	
 	/// Generates grid with uniform spacing
-	void generateMesh_UniformDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM])
+	void generateMesh_UniformDistribution(PetscReal rmin[NDIM], PetscReal rmax[NDIM], PetscMPIInt rank)
 	{
-		std::printf("CartMesh: generateMesh_Uniform: Generating grid\n");
+		if(rank == 0)
+			std::printf("CartMesh: generateMesh_Uniform: Generating grid\n");
 		for(int idim = 0; idim < NDIM; idim++)
 		{
 			for(int i = 0; i < npoind[idim]; i++) {
@@ -181,7 +190,8 @@ public:
 		}
 
 		computeMeshSize();
-		std::printf("CartMesh: generateMesh_Uniform: h = %f\n", h);
+		if(rank == 0)
+			std::printf("CartMesh: generateMesh_Uniform: h = %f\n", h);
 	}
 
 };

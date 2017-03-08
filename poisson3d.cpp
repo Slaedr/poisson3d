@@ -46,7 +46,7 @@ void computeRHS(const CartMesh *const m, DM da, PetscMPIInt rank, Vec f, Vec uex
 
 	// get the starting global indices and sizes (in each direction) of the local mesh partition
 	PetscInt start[NDIM], lsize[NDIM];
-	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsise[0], &lsize[1], &lsize[2]);
+	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsize[0], &lsize[1], &lsize[2]);
 
 	// get local data that can be accessed by global indices
 	PetscReal *** rhs, *** uex;
@@ -58,8 +58,6 @@ void computeRHS(const CartMesh *const m, DM da, PetscMPIInt rank, Vec f, Vec uex
 		for(PetscInt j = start[1]; j < start[1]+lsize[1]; j++)
 			for(PetscInt i = start[0]; i < start[0]+lsize[0]; i++)
 			{
-				indices[l] = getFlattenedInteriorIndex(m,i,j,k);
-
 				rhs[k][j][i] = 12.0*PI*PI*std::sin(2*PI*m->gcoords(0,i))*std::sin(2*PI*m->gcoords(1,j))*std::sin(2*PI*m->gcoords(2,k));
 				uex[k][j][i] = std::sin(2*PI*m->gcoords(0,i))*std::sin(2*PI*m->gcoords(1,j))*std::sin(2*PI*m->gcoords(2,k));
 			}
@@ -80,9 +78,7 @@ void computeLHS(const CartMesh *const m, DM da, PetscMPIInt rank, Mat A)
 
 	// get the starting global indices and sizes (in each direction) of the local mesh partition
 	PetscInt start[NDIM], lsize[NDIM];
-	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsise[0], &lsize[1], &lsize[2]);
-	if(rank == 0)	
-		printf("ComputeLHS: The starting indices of the first rank are %d, %d, %d\n", start[0], start[1], start[2]);
+	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsize[0], &lsize[1], &lsize[2]);
 
 	for(PetscInt k = start[2]; k < start[2]+lsize[2]; k++)
 		for(PetscInt j = start[1]; j < start[1]+lsize[1]; j++)
@@ -103,18 +99,20 @@ void computeLHS(const CartMesh *const m, DM da, PetscMPIInt rank, Mat A)
 				cindices[4] = {k,j,i+1,0};
 				cindices[5] = {k,j+1,i,0};
 				cindices[6] = {k+1,j,i,0};
+
+				PetscInt I = i+1, J = j+1, K = k+1;		// 1-offset indices for mesh coords access
 				
-				values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-				values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-				values[2] = -1.0/( (m->gcoords(2,k)-m->gcoords(2,k-1)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
+				values[0] = -1.0/( (m->gcoords(0,I)-m->gcoords(0,I-1)) * 0.5*(m->gcoords(0,I+1)-m->gcoords(0,I-1)) );
+				values[1] = -1.0/( (m->gcoords(1,J)-m->gcoords(1,J-1)) * 0.5*(m->gcoords(1,J+1)-m->gcoords(1,J-1)) );
+				values[2] = -1.0/( (m->gcoords(2,K)-m->gcoords(2,K-1)) * 0.5*(m->gcoords(2,K+1)-m->gcoords(2,K-1)) );
 
-				values[3] =  2.0/(m->gcoords(0,i+1)-m->gcoords(0,i-1))*( 1.0/(m->gcoords(0,i+1)-m->gcoords(0,i))+1.0/(m->gcoords(0,i)-m->gcoords(0,i-1)) );
-				values[3] += 2.0/(m->gcoords(1,j+1)-m->gcoords(1,j-1))*( 1.0/(m->gcoords(1,j+1)-m->gcoords(1,j))+1.0/(m->gcoords(1,j)-m->gcoords(1,j-1)) );
-				values[3] += 2.0/(m->gcoords(2,k+1)-m->gcoords(2,k-1))*( 1.0/(m->gcoords(2,k+1)-m->gcoords(2,k))+1.0/(m->gcoords(2,k)-m->gcoords(2,k-1)) );
+				values[3] =  2.0/(m->gcoords(0,I+1)-m->gcoords(0,I-1))*( 1.0/(m->gcoords(0,I+1)-m->gcoords(0,I))+1.0/(m->gcoords(0,I)-m->gcoords(0,I-1)) );
+				values[3] += 2.0/(m->gcoords(1,J+1)-m->gcoords(1,J-1))*( 1.0/(m->gcoords(1,J+1)-m->gcoords(1,J))+1.0/(m->gcoords(1,J)-m->gcoords(1,J-1)) );
+				values[3] += 2.0/(m->gcoords(2,K+1)-m->gcoords(2,K-1))*( 1.0/(m->gcoords(2,K+1)-m->gcoords(2,K))+1.0/(m->gcoords(2,K)-m->gcoords(2,K-1)) );
 
-				values[4] = -1.0/( (m->gcoords(0,i+1)-m->gcoords(0,i)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
-				values[5] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
-				values[6] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
+				values[4] = -1.0/( (m->gcoords(0,I+1)-m->gcoords(0,I)) * 0.5*(m->gcoords(0,I+1)-m->gcoords(0,I-1)) );
+				values[5] = -1.0/( (m->gcoords(1,J+1)-m->gcoords(1,J)) * 0.5*(m->gcoords(1,J+1)-m->gcoords(1,J-1)) );
+				values[6] = -1.0/( (m->gcoords(2,K+1)-m->gcoords(2,K)) * 0.5*(m->gcoords(2,K+1)-m->gcoords(2,K-1)) );
 
 				MatSetValuesStencil(A, mm, rindices, n, cindices, values, INSERT_VALUES);
 				//if(rank == 0)
@@ -132,28 +130,30 @@ PetscReal computeNorm(const CartMesh *const m, Vec v, DM da)
 {
 	// get the starting global indices and sizes (in each direction) of the local mesh partition
 	PetscInt start[NDIM], lsize[NDIM];
-	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsise[0], &lsize[1], &lsize[2]);
+	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsize[0], &lsize[1], &lsize[2]);
 	
 	// get local data that can be accessed by global indices
 	PetscReal *** vv;
-	DMDAVecGetArray(da, v, (void*)&vv);
+	DMDAVecGetArray(da, v, &vv);
 
-	PetscReal norm = 0;
+	PetscReal norm = 0, global_norm = 0;
 
 	for(PetscInt k = start[2]; k < start[2]+lsize[2]; k++)
 		for(PetscInt j = start[1]; j < start[1]+lsize[1]; j++)
 			for(PetscInt i = start[0]; i < start[0]+lsize[0]; i++)
 			{
 				PetscReal vol = 1.0/8.0*(m->gcoords(0,i+1)-m->gcoords(0,i-1))*(m->gcoords(1,j+1)-m->gcoords(1,j-1))*(m->gcoords(2,k+1)-m->gcoords(2,k-1));
-				PetscInt ind = getFlattenedInteriorIndex(m,i,j,k);
 				norm += vv[k][j][i]*vv[k][j][i]*vol;
 			}
 
-	DMDAVecRestoreArray(da, v, (void*)&vv);
+	DMDAVecRestoreArray(da, v, &vv);
 
-	//TODO: MPI stuff here to get global norm
+	MPI_Barrier(PETSC_COMM_WORLD);
 
-	return norm;
+	// get global norm
+	MPI_Reduce(&norm, &global_norm, 1, MPI_DOUBLE, MPI_SUM, 0, PETSC_COMM_WORLD);
+
+	return global_norm;
 }
 
 //#undef __FUNCT__
@@ -164,8 +164,7 @@ int main(int argc, char* argv[])
 	using namespace std;
 
 	if(argc < 3) {
-		if(rank == 0)
-			printf("Please specify a control file and a Petsc options file.\n");
+		printf("Please specify a control file and a Petsc options file.\n");
 		return 0;
 	}
 
@@ -222,17 +221,17 @@ int main(int argc, char* argv[])
 	DM da;					///< Distributed array context for the cart grid
 	PetscInt ndofpernode = 1;
 	PetscInt stencil_width = 1;
-	DMBoundaryType bx = DMDA_BOUNDARY_GHOST;
-	DMBoundaryType by = DMDA_BOUNDARY_GHOST;
-	DMBoundaryType bz = DMDA_BOUNDARY_GHOST;
+	DMBoundaryType bx = DM_BOUNDARY_GHOSTED;
+	DMBoundaryType by = DM_BOUNDARY_GHOSTED;
+	DMBoundaryType bz = DM_BOUNDARY_GHOSTED;
 	DMDAStencilType stencil_type = DMDA_STENCIL_STAR;
 
 	// generate mesh - a copy of the mesh is stored by all processes as the mesh structure is very small
-	CartMesh m(npdim, ndofpernode, stencil_width, bx, by, bz, stencil_type, da);
+	CartMesh m(npdim, ndofpernode, stencil_width, bx, by, bz, stencil_type, &da, rank);
 	if(!strcmp(gridtype, "chebyshev"))
-		m.generateMesh_ChebyshevDistribution(rmin,rmax);
+		m.generateMesh_ChebyshevDistribution(rmin,rmax, rank);
 	else
-		m.generateMesh_UniformDistribution(rmin,rmax);
+		m.generateMesh_UniformDistribution(rmin,rmax, rank);
 
 	Vec u, uexact, b, err;
 	Mat A, Ap;
@@ -270,7 +269,7 @@ int main(int argc, char* argv[])
 	 * Without preconditioner, it is $ \Delta x^k = r^k $ where r is the residual.
 	 * In PETSc, it is actually a "modified" Richardson iteration: $ \Delta x^k = \omega r^k $ where omega is a relaxation parameter.
 	 */
-	ierr = KSPCreate(PETSC_COMM_SELF, &ksp);
+	ierr = KSPCreate(PETSC_COMM_WORLD, &ksp);
 	ierr = KSPSetOperators(ksp, A, Ap); CHKERRQ(ierr);
 	KSPSetType(ksp, KSPRICHARDSON);
 	//KSPSetType(ksp, KSPBCGS);
@@ -283,7 +282,7 @@ int main(int argc, char* argv[])
 #endif
 		PCSetType(pc, PCSOR);
 		PCSORSetOmega(pc,1.0);
-		PCSORSetIterations(pc, 1, 1);
+		PCSORSetIterations(pc, 1, 2);
 		ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
 #ifdef USE_HIPERSOLVER
 	}
@@ -305,20 +304,21 @@ int main(int argc, char* argv[])
 	ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
 	
 	ierr = KSPSolve(ksp, b, u);
-	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_SELF);CHKERRQ(ierr);		// change SELF to WORLD for multiprocessor
+	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
 	// post-process
 	if(rank == 0) {
-		int kspiters; PetscReal errnorm, rnorm;
+		int kspiters; PetscReal rnorm;
 		KSPGetIterationNumber(ksp, &kspiters);
 		printf("Number of KSP iterations = %d\n", kspiters);
 		KSPGetResidualNorm(ksp, &rnorm);
 		printf("KSP residual norm = %f\n", rnorm);
 	}
 	
+	PetscReal errnorm;
 	VecCopy(u,err);
 	VecAXPY(err, -1.0, uexact);
-	errnorm = computeNorm(err,&m);
+	errnorm = computeNorm(&m, err, da);
 	if(rank == 0) {
 		printf("h and error: %f  %f\n", m.gh(), errnorm);
 		printf("log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));
