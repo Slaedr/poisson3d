@@ -39,64 +39,70 @@ inline PetscInt getFlattenedInteriorIndex(const CartMesh *const m, const PetscIn
  * \param f is the rhs vector
  * \param uexact is the exact solution
  */
-void computeRHS(const CartMesh *const m, Vec f, Vec uexact)
+void computeRHS(const CartMesh *const m, DM da, PetscMPIInt rank, Vec f, Vec uexact)
 {
-	printf("ComputeRHS: Starting\n");
-	PetscReal *valuesrhs = (PetscReal*)std::malloc(m->gninpoin()*sizeof(PetscReal));
-	PetscReal *valuesuexact = (PetscReal*)std::malloc(m->gninpoin()*sizeof(PetscReal));
-	PetscInt *indices = (PetscInt*)std::malloc(m->gninpoin()*sizeof(PetscInt));
+	if(rank == 0)
+		printf("ComputeRHS: Starting\n");
 
-	// point ordering index
-	PetscInt l = 0;
+	// get the starting global indices and sizes (in each direction) of the local mesh partition
+	PetscInt start[NDIM], lsize[NDIM];
+	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsise[0], &lsize[1], &lsize[2]);
+
+	// get local data that can be accessed by global indices
+	PetscReal *** rhs, *** uex;
+	DMDAVecGetArray(da, f, (void*)&rhs);
+	DMDAVecGetArray(da, uexact, (void*)&uex);
 
 	// iterate over interior nodes
-	for(PetscInt k = 1; k < m->gnpoind(2)-1; k++)
-		for(PetscInt j = 1; j < m->gnpoind(1)-1; j++)
-			for(PetscInt i = 1; i < m->gnpoind(0)-1; i++)
+	for(PetscInt k = start[2]; k < start[2]+lsize[2]; k++)
+		for(PetscInt j = start[1]; j < start[1]+lsize[1]; j++)
+			for(PetscInt i = start[0]; i < start[0]+lsize[0]; i++)
 			{
 				indices[l] = getFlattenedInteriorIndex(m,i,j,k);
 
-				valuesrhs[l] = 12.0*PI*PI*std::sin(2*PI*m->gcoords(0,i))*std::sin(2*PI*m->gcoords(1,j))*std::sin(2*PI*m->gcoords(2,k));
-				valuesuexact[l] = std::sin(2*PI*m->gcoords(0,i))*std::sin(2*PI*m->gcoords(1,j))*std::sin(2*PI*m->gcoords(2,k));
-
-				l++;
+				rhs[k][j][i] = 12.0*PI*PI*std::sin(2*PI*m->gcoords(0,i))*std::sin(2*PI*m->gcoords(1,j))*std::sin(2*PI*m->gcoords(2,k));
+				uex[k][j][i] = std::sin(2*PI*m->gcoords(0,i))*std::sin(2*PI*m->gcoords(1,j))*std::sin(2*PI*m->gcoords(2,k));
 			}
-
-	VecSetValues(f, m->gninpoin(), indices, valuesrhs, INSERT_VALUES);
-	VecSetValues(uexact, m->gninpoin(), indices, valuesuexact, INSERT_VALUES);
-
-	std::free(valuesrhs);
-	std::free(valuesuexact);
-	std::free(indices);
-	printf("ComputeRHS: Done\n");
+	
+	DMDAVecRestoreArray(da, f, (void*)&rhs);
+	DMDAVecRestoreArray(da, uexact, (void*)&uex);
+	if(rank == 0)
+		printf("ComputeRHS: Done\n");
 }
 
 /// Set stiffness matrix corresponding to interior points
 /** Inserts entries rowwise into the matrix.
  */
-void computeLHS(const CartMesh *const m, Mat A)
+void computeLHS(const CartMesh *const m, DM da, PetscMPIInt rank, Mat A)
 {
-	printf("ComputeLHS: For interior nodes...\n");
+	if(rank == 0)	
+		printf("ComputeLHS: Setting values of the LHS matrix...\n");
 
-	for(PetscInt k = 1; k < m->gnpoind(2)-1; k++)
-		for(PetscInt j = 1; j < m->gnpoind(1)-1; j++)
-			for(PetscInt i = 1; i < m->gnpoind(0)-1; i++)
+	// get the starting global indices and sizes (in each direction) of the local mesh partition
+	PetscInt start[NDIM], lsize[NDIM];
+	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsise[0], &lsize[1], &lsize[2]);
+	if(rank == 0)	
+		printf("ComputeLHS: The starting indices of the first rank are %d, %d, %d\n", start[0], start[1], start[2]);
+
+	for(PetscInt k = start[2]; k < start[2]+lsize[2]; k++)
+		for(PetscInt j = start[1]; j < start[1]+lsize[1]; j++)
+			for(PetscInt i = start[0]; i < start[0]+lsize[0]; i++)
 			{
 				PetscReal values[NSTENCIL];
-				PetscInt cindices[NSTENCIL];
-				PetscInt rindices[1];
+				MatStencil cindices[NSTENCIL];
+				MatStencil rindices[1];
 				PetscInt n = NSTENCIL;
 				PetscInt mm = 1;
 
-				rindices[0] = getFlattenedInteriorIndex(m,i,j,k);
+				rindices[0] = {k,j,i,0};
 
-				cindices[0] = getFlattenedInteriorIndex(m,i-1,j,k);
-				cindices[1] = getFlattenedInteriorIndex(m,i,j-1,k);
-				cindices[2] = getFlattenedInteriorIndex(m,i,j,k-1);
-				cindices[3] = rindices[0];
-				cindices[4] = getFlattenedInteriorIndex(m,i+1,j,k);
-				cindices[5] = getFlattenedInteriorIndex(m,i,j+1,k);
-				cindices[6] = getFlattenedInteriorIndex(m,i,j,k+1);
+				cindices[0] = {k,j,i-1,0};
+				cindices[1] = {k,j-1,i,0};
+				cindices[2] = {k-1,j,i,0};
+				cindices[3] = {k,j,i,0};
+				cindices[4] = {k,j,i+1,0};
+				cindices[5] = {k,j+1,i,0};
+				cindices[6] = {k+1,j,i,0};
 				
 				values[0] = -1.0/( (m->gcoords(0,i)-m->gcoords(0,i-1)) * 0.5*(m->gcoords(0,i+1)-m->gcoords(0,i-1)) );
 				values[1] = -1.0/( (m->gcoords(1,j)-m->gcoords(1,j-1)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
@@ -110,32 +116,43 @@ void computeLHS(const CartMesh *const m, Mat A)
 				values[5] = -1.0/( (m->gcoords(1,j+1)-m->gcoords(1,j)) * 0.5*(m->gcoords(1,j+1)-m->gcoords(1,j-1)) );
 				values[6] = -1.0/( (m->gcoords(2,k+1)-m->gcoords(2,k)) * 0.5*(m->gcoords(2,k+1)-m->gcoords(2,k-1)) );
 
-				MatSetValues(A, mm, rindices, n, cindices, values, INSERT_VALUES);
-				//printf("\tProcessed index %d, diag value = %f\n", rindices[0], values[3]);
+				MatSetValuesStencil(A, mm, rindices, n, cindices, values, INSERT_VALUES);
+				//if(rank == 0)
+				//	printf("\tProcessed index %d, diag value = %f\n", rindices[0], values[3]);
 			}
 
-	printf("ComputeLHS: Done.\n");
+	if(rank == 0)
+		printf("ComputeLHS: Done.\n");
 }
 
 /// Computes L2 norm of a mesh function v, assuming piecewise constant values in a dual cell around each node.
-PetscReal computeNorm(Vec v, const CartMesh *const m)
+/** Note that the actual norm will only be returned by process 0; the other processes return only local norms.
+ */
+PetscReal computeNorm(const CartMesh *const m, Vec v, DM da)
 {
-	PetscInt sz;
-	PetscReal * vals, norm = 0;
+	// get the starting global indices and sizes (in each direction) of the local mesh partition
+	PetscInt start[NDIM], lsize[NDIM];
+	DMDAGetCorners(da, &start[0], &start[1], &start[2], &lsise[0], &lsize[1], &lsize[2]);
+	
+	// get local data that can be accessed by global indices
+	PetscReal *** vv;
+	DMDAVecGetArray(da, v, (void*)&vv);
 
-	VecGetArray(v, &vals);
-	VecGetLocalSize(v, &sz);
+	PetscReal norm = 0;
 
-	for(int k = 1; k < m->gnpoind(2)-1; k++)
-		for(int j = 1; j < m->gnpoind(1)-1; j++)
-			for(int i = 1; i < m->gnpoind(0)-1; i++)
+	for(PetscInt k = start[2]; k < start[2]+lsize[2]; k++)
+		for(PetscInt j = start[1]; j < start[1]+lsize[1]; j++)
+			for(PetscInt i = start[0]; i < start[0]+lsize[0]; i++)
 			{
 				PetscReal vol = 1.0/8.0*(m->gcoords(0,i+1)-m->gcoords(0,i-1))*(m->gcoords(1,j+1)-m->gcoords(1,j-1))*(m->gcoords(2,k+1)-m->gcoords(2,k-1));
 				PetscInt ind = getFlattenedInteriorIndex(m,i,j,k);
-				norm += vals[ind]*vals[ind]*vol;
+				norm += vv[k][j][i]*vv[k][j][i]*vol;
 			}
 
-	VecRestoreArray(v, &vals);
+	DMDAVecRestoreArray(da, v, (void*)&vv);
+
+	//TODO: MPI stuff here to get global norm
+
 	return norm;
 }
 
@@ -147,25 +164,29 @@ int main(int argc, char* argv[])
 	using namespace std;
 
 	if(argc < 3) {
-		printf("Please specify a control file and a Petsc options file.\n");
+		if(rank == 0)
+			printf("Please specify a control file and a Petsc options file.\n");
 		return 0;
 	}
 
 	char help[] = "Solves 3D Poisson equation by finite differences. Arguments: (1) Control file (2) Petsc options file\n\n";
 	char* confile = argv[1];
 	char * optfile = argv[2];
-	PetscMPIInt size;
+	PetscMPIInt size, rank;
 	PetscErrorCode ierr;
 	int nbsw, nasw; char fgpiluch, chtemp;
 #ifdef USE_HIPERSOLVER
 	H_ILU_data iluctrl;
-	printf("Hipersolver available.\n");
+	if(rank == 0)
+		printf("Hipersolver available.\n");
 #endif
 
 	ierr = PetscInitialize(&argc, &argv, optfile, help); CHKERRQ(ierr);
 	MPI_Comm_size(PETSC_COMM_WORLD,&size);
+	MPI_Comm_rank(PETSC_COMM_WORLD,&rank);
 
 	// Read control file
+	
 	PetscInt npdim[NDIM];
 	PetscReal rmax[NDIM], rmin[NDIM];
 	char temp[50], gridtype[50];
@@ -182,33 +203,36 @@ int main(int argc, char* argv[])
 	for(int i = 0; i < NDIM; i++)
 		fscanf(conf, "%lf", &rmax[i]);
 	fscanf(conf, "%s", temp); fscanf(conf, "%c", &chtemp); fscanf(conf, "%c", &fgpiluch);
-	printf("Use FGPILU? %c\n", fgpiluch);
 	if(fgpiluch=='y') {
 		fscanf(conf, "%s", temp); fscanf(conf, "%d", &nbsw);
 		fscanf(conf, "%s", temp); fscanf(conf, "%d", &nasw);
 	}
 	fclose(conf);
 
-	printf("Domain boundaries in each dimension:\n");
-	for(int i = 0; i < NDIM; i++)
-		printf("%f %f ", rmin[i], rmax[i]);
-	printf("\n");
-
-	// generate mesh
-	CartMesh m(npdim, 1);
-	if(!strcmp(gridtype, "chebyshev"))
-		m.generateMesh_ChebyshevDistribution(rmin,rmax);
-	else
-		m.generateMesh_UniformDistribution(rmin,rmax);
+	if(rank == 0) {
+		printf("Use FGPILU? %c\n", fgpiluch);
+		printf("Domain boundaries in each dimension:\n");
+		for(int i = 0; i < NDIM; i++)
+			printf("%f %f ", rmin[i], rmax[i]);
+		printf("\n");
+	}
+	//----------------------------------------------------------------------------------
 
 	// set up Petsc variables
-	DM * da;					///< Distributed array context for the cart grid
+	DM da;					///< Distributed array context for the cart grid
 	PetscInt ndofpernode = 1;
 	PetscInt stencil_width = 1;
 	DMBoundaryType bx = DMDA_BOUNDARY_GHOST;
 	DMBoundaryType by = DMDA_BOUNDARY_GHOST;
 	DMBoundaryType bz = DMDA_BOUNDARY_GHOST;
 	DMDAStencilType stencil_type = DMDA_STENCIL_STAR;
+
+	// generate mesh - a copy of the mesh is stored by all processes as the mesh structure is very small
+	CartMesh m(npdim, ndofpernode, stencil_width, bx, by, bz, stencil_type, da);
+	if(!strcmp(gridtype, "chebyshev"))
+		m.generateMesh_ChebyshevDistribution(rmin,rmax);
+	else
+		m.generateMesh_UniformDistribution(rmin,rmax);
 
 	Vec u, uexact, b, err;
 	Mat A, Ap;
@@ -220,17 +244,17 @@ int main(int argc, char* argv[])
 	VecDuplicate(u, &err);
 	VecSet(u, 0.0);
 
-	MatCreateSeqAIJ(PETSC_COMM_WORLD, m.gninpoin(), m.gninpoin(), NSTENCIL, NULL, &A);
+	DMCreateMatrix(da, &A);
 
-	computeRHS(&m, b, uexact);
-	computeLHS(&m, A);
+	// compute values of LHS, RHS and exact soln
+	
+	computeRHS(&m, da, rank, b, uexact);
+	computeLHS(&m, da, rank, A);
+
+	// Assemble LHS
 
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
-	VecAssemblyBegin(uexact);
-	VecAssemblyBegin(b);
 	MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
-	VecAssemblyEnd(uexact);
-	VecAssemblyEnd(b);
 
 	// create a copy of A for the preconditioner
 	MatConvert(A, MATSAME, MAT_INITIAL_MATRIX, &Ap);
@@ -264,7 +288,8 @@ int main(int argc, char* argv[])
 #ifdef USE_HIPERSOLVER
 	}
 	else {
-		printf("Using FGPILU as preconditioner.\n");
+		if(rank == 0)
+			printf("Using FGPILU as preconditioner.\n");
 		PCSetType(pc, PCSHELL);
 		iluctrl.nbuildsweeps = nbsw;
 		iluctrl.napplysweeps = nasw;
@@ -278,26 +303,26 @@ int main(int argc, char* argv[])
 	}
 #endif
 	ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
-
-	/*PetscInt iter; PetscReal rnor; PetscViewer viewer;
-	PetscViewerAndFormatCreate(viewer, PETSC_VIEWER_ASCII_COMMON, &vf);
-	KSPMonitorDefault(ksp, iter, rnor, vf);*/
 	
 	ierr = KSPSolve(ksp, b, u);
 	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_SELF);CHKERRQ(ierr);		// change SELF to WORLD for multiprocessor
 
 	// post-process
-	int kspiters; PetscReal errnorm, rnorm;
-	KSPGetIterationNumber(ksp, &kspiters);
-	printf("Number of KSP iterations = %d\n", kspiters);
-	KSPGetResidualNorm(ksp, &rnorm);
-	printf("KSP residual norm = %f\n", rnorm);
+	if(rank == 0) {
+		int kspiters; PetscReal errnorm, rnorm;
+		KSPGetIterationNumber(ksp, &kspiters);
+		printf("Number of KSP iterations = %d\n", kspiters);
+		KSPGetResidualNorm(ksp, &rnorm);
+		printf("KSP residual norm = %f\n", rnorm);
+	}
 	
 	VecCopy(u,err);
 	VecAXPY(err, -1.0, uexact);
 	errnorm = computeNorm(err,&m);
-	printf("h and error: %f  %f\n", m.gh(), errnorm);
-	printf("log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));
+	if(rank == 0) {
+		printf("h and error: %f  %f\n", m.gh(), errnorm);
+		printf("log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));
+	}
 
 #ifdef USE_HIPERSOLVER
 	if(fgpiluch == 'y')

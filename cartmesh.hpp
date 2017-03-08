@@ -15,10 +15,10 @@ class CartMesh
 	PetscInt npointotal;			///< Total number of points in the grid
 	PetscInt ninpoin;				///< Number of internal (non-boundary) points
 	PetscReal h;					///< Mesh size parameter
-	PetscInt nparts;				///< Number of partitions
-	PetscInt ** partmin;			///< In each direction, first index corresponding to each partition
-	PetscInt ** partmax;			///< In each direction, one more than the last index corresponding to each partition
-	PetscInt * npartpoin;			///< Number of points in each partition that are not on the global boundary
+
+	// Stuff related to multiprocess
+	PetscMPIInt nprocs[NDIM];		///< Number of processors in each dimension
+	PetscMPIInt ntprocs;			///< Total number of processors
 
 	/// Computes the mesh size parameter h
 	/** Sets h as the length of the longest diagonal of all cells.
@@ -67,7 +67,32 @@ public:
 		ninpoin = npointotal-nbpoints;
 
 		std::printf("CartMesh: Total points = %d, interior points = %d, number of partitions required = %d\n", npointotal, ninpoin, nparts);
+	}
 
+	CartMesh(const npdim[NDIM], PetscInt ndofpernode, PetscInt stencil_width,
+		DMBoundaryType bx, DMBoundaryType by, DMBoundaryType bz, DMDAStencilType stencil_type, DM da)
+	{
+		std::printf("CartMesh: Number of points in each direction: ");
+		for(int i = 0; i < NDIM; i++) {
+			npoind[i] = npdim[i];
+			std::printf("%d ", npoind[i]);
+		}
+		std::printf("\n");
+		npointotal = 1;
+		for(int i = 0; i < NDIM; i++)
+			npointotal *= npoind[i];
+
+		PetscInt nbpoints = npoind[0]*npoind[1]*2 + (npoind[2]-2)*npoind[0]*2 + (npoind[1]-2)*(npoind[2]-2)*2;
+		ninpoin = npointotal-nbpoints;
+
+		std::printf("CartMesh: Setting up DMDA\n");
+		DMDACreate3d(PETSC_COMM_WORLD, bx, by, bz, stencil_type, npoind[0]-2, npoind[1]-2, npoind[2]-2, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, ndofpernode, stencil_width, NULL, NULL, NULL, &da);
+		DMDAGetInfo(da, NULL, NULL, NULL, NULL, &nprocs[0], &nprocs[1], &nprocs[2], NULL, NULL, NULL, NULL, NULL, NULL);
+		ntprocs = nprocs[0]*nprocs[1]*nprocs[2];
+
+		std::printf("CartMesh: Total points = %d, interior points = %d, total number of partitions = %d\n", npointotal, ninpoin, ntprocs);
+
+		// have each process store coords; hardly costs anything
 		coords = (PetscReal**)std::malloc(NDIM*sizeof(PetscReal*));
 		for(int i = 0; i < NDIM; i++)
 			coords[i] = (PetscReal*)std::malloc(npoind[i]*sizeof(PetscReal));
