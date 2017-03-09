@@ -256,7 +256,9 @@ int main(int argc, char* argv[])
 	MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 
 	// create a copy of A for the preconditioner
-	MatConvert(A, MATSAME, MAT_INITIAL_MATRIX, &Ap);
+	//MatConvert(A, MATSAME, MAT_INITIAL_MATRIX, &Ap);
+	DMCreateMatrix(da, &Ap);
+	MatCopy(A, Ap, SAME_NONZERO_PATTERN);
 
 	/*printf("Assembled RHS vector:\n");
 	VecView(b, 0);
@@ -266,8 +268,8 @@ int main(int argc, char* argv[])
 	// set up solver
 	/** Note that the Richardson solver with preconditioner is nothing but the preconditioner applied iteratively in
 	 * approximate factorization (which I also call error correction) form.
-	 * Without preconditioner, it is $ \Delta x^k = r^k $ where r is the residual.
-	 * In PETSc, it is actually a "modified" Richardson iteration: $ \Delta x^k = \omega r^k $ where omega is a relaxation parameter.
+	 * Without preconditioner, it is \f$ \Delta x^k = r^k \f$ where r is the residual.
+	 * In PETSc, it is actually a "modified" Richardson iteration: \f$ \Delta x^k = \omega r^k \f$ where omega is a relaxation parameter.
 	 */
 	ierr = KSPCreate(PETSC_COMM_WORLD, &ksp);
 	ierr = KSPSetOperators(ksp, A, Ap); CHKERRQ(ierr);
@@ -282,7 +284,7 @@ int main(int argc, char* argv[])
 #endif
 		PCSetType(pc, PCSOR);
 		PCSORSetOmega(pc,1.0);
-		PCSORSetIterations(pc, 1, 2);
+		PCSORSetIterations(pc, 1, 1);
 		ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
 #ifdef USE_HIPERSOLVER
 	}
@@ -293,6 +295,7 @@ int main(int argc, char* argv[])
 		iluctrl.nbuildsweeps = nbsw;
 		iluctrl.napplysweeps = nasw;
 		iluctrl.setup = false;
+		VecDuplicate(u, &iluctrl.scale);
 		PCShellSetContext(pc, &iluctrl);
 		//PCShellSetSetUp(pc, &compute_fgpilu_local);
 		PCShellSetApply(pc, &apply_fgpilu_jacobi_local);
@@ -325,8 +328,12 @@ int main(int argc, char* argv[])
 	}
 
 #ifdef USE_HIPERSOLVER
-	if(fgpiluch == 'y')
+	if(fgpiluch == 'y') {
 		cleanup_fgpilu(pc);
+		VecDestroy(&iluctrl.scale);
+		if(rank == 0)
+			printf("Destroyed temp vec used for scaling.\n");
+	}
 #endif
 	KSPDestroy(&ksp);
 	VecDestroy(&u);
