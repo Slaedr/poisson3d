@@ -257,8 +257,8 @@ int main(int argc, char* argv[])
 
 	// create a copy of A for the preconditioner
 	//MatConvert(A, MATSAME, MAT_INITIAL_MATRIX, &Ap);
-	DMCreateMatrix(da, &Ap);
-	MatCopy(A, Ap, SAME_NONZERO_PATTERN);
+	//DMCreateMatrix(da, &Ap);
+	//MatCopy(A, Ap, SAME_NONZERO_PATTERN);
 
 	/*printf("Assembled RHS vector:\n");
 	VecView(b, 0);
@@ -272,7 +272,7 @@ int main(int argc, char* argv[])
 	 * In PETSc, it is actually a "modified" Richardson iteration: \f$ \Delta x^k = \omega r^k \f$ where omega is a relaxation parameter.
 	 */
 	ierr = KSPCreate(PETSC_COMM_WORLD, &ksp);
-	ierr = KSPSetOperators(ksp, A, Ap); CHKERRQ(ierr);
+	ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
 	KSPSetType(ksp, KSPRICHARDSON);
 	//KSPSetType(ksp, KSPBCGS);
 	KSPRichardsonSetScale(ksp, 1.0);
