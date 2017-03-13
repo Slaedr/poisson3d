@@ -234,7 +234,7 @@ int main(int argc, char* argv[])
 		m.generateMesh_UniformDistribution(rmin,rmax, rank);
 
 	Vec u, uexact, b, err;
-	Mat A, Ap;
+	Mat A;
 	KSP ksp; PC pc;
 
 	DMCreateGlobalVector(da, &u);
@@ -295,7 +295,6 @@ int main(int argc, char* argv[])
 		iluctrl.nbuildsweeps = nbsw;
 		iluctrl.napplysweeps = nasw;
 		iluctrl.setup = false;
-		VecDuplicate(u, &iluctrl.scale);
 		PCShellSetContext(pc, &iluctrl);
 		//PCShellSetSetUp(pc, &compute_fgpilu_local);
 		PCShellSetApply(pc, &apply_fgpilu_jacobi_local);
@@ -330,9 +329,6 @@ int main(int argc, char* argv[])
 #ifdef USE_HIPERSOLVER
 	if(fgpiluch == 'y') {
 		cleanup_fgpilu(pc);
-		VecDestroy(&iluctrl.scale);
-		if(rank == 0)
-			printf("Destroyed temp vec used for scaling.\n");
 	}
 #endif
 	KSPDestroy(&ksp);
@@ -341,7 +337,6 @@ int main(int argc, char* argv[])
 	VecDestroy(&b);
 	VecDestroy(&err);
 	MatDestroy(&A);
-	MatDestroy(&Ap);
 	DMDestroy(&da);
 	PetscFinalize();
 	return 0;
