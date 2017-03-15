@@ -228,6 +228,7 @@ int main(int argc, char* argv[])
 
 	// generate mesh - a copy of the mesh is stored by all processes as the mesh structure is very small
 	CartMesh m(npdim, ndofpernode, stencil_width, bx, by, bz, stencil_type, &da, rank);
+	
 	if(!strcmp(gridtype, "chebyshev"))
 		m.generateMesh_ChebyshevDistribution(rmin,rmax, rank);
 	else
@@ -254,16 +255,6 @@ int main(int argc, char* argv[])
 
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
-
-	// create a copy of A for the preconditioner
-	//MatConvert(A, MATSAME, MAT_INITIAL_MATRIX, &Ap);
-	//DMCreateMatrix(da, &Ap);
-	//MatCopy(A, Ap, SAME_NONZERO_PATTERN);
-
-	/*printf("Assembled RHS vector:\n");
-	VecView(b, 0);
-	printf("Assembled LHS matrix:\n");
-	MatView(A, 0);*/
 
 	// set up solver
 	/** Note that the Richardson solver with preconditioner is nothing but the preconditioner applied iteratively in
@@ -328,7 +319,7 @@ int main(int argc, char* argv[])
 
 #ifdef USE_HIPERSOLVER
 	if(fgpiluch == 'y') {
-		cleanup_fgpilu(pc);
+			cleanup_fgpilu(pc);
 	}
 #endif
 	KSPDestroy(&ksp);
