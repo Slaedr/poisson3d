@@ -6,10 +6,10 @@ project (poisson3d)
 # CMAKE_BUILD_TYPE ('Debug' or 'Release')
 # PETSC_DIR (directory)
 # PETSC_ARCH (string)
-# OMP (bool)
+# USE_OMP (bool)
 
 # to compile with OpenMP
-if(OMP)
+if(USE_OMP)
 	message(STATUS "Compiling with OpenMP")
 	if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
 		message(STATUS "GNU compiler found.")
