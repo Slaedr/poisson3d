@@ -173,11 +173,11 @@ int main(int argc, char* argv[])
 	char * optfile = argv[2];
 	PetscMPIInt size, rank;
 	PetscErrorCode ierr;
-	int nbsw, nasw; char fgpiluch, chtemp;
+	int nbsw, nasw; char precch, chtemp;
 #ifdef USE_HIPERSOLVER
 	H_ILU_data iluctrl;
 	if(rank == 0)
-		printf("Hipersolver available.\n");
+		printf("PHiPerSolver available.\n");
 #endif
 
 	ierr = PetscInitialize(&argc, &argv, optfile, help); CHKERRQ(ierr);
@@ -201,15 +201,15 @@ int main(int argc, char* argv[])
 	fscanf(conf, "%s", temp);
 	for(int i = 0; i < NDIM; i++)
 		fscanf(conf, "%lf", &rmax[i]);
-	fscanf(conf, "%s", temp); fscanf(conf, "%c", &chtemp); fscanf(conf, "%c", &fgpiluch);
-	if(fgpiluch=='y') {
+	fscanf(conf, "%s", temp); fscanf(conf, "%c", &chtemp); fscanf(conf, "%c", &precch);
+	if(precch=='y') {
 		fscanf(conf, "%s", temp); fscanf(conf, "%d", &nbsw);
 		fscanf(conf, "%s", temp); fscanf(conf, "%d", &nasw);
 	}
 	fclose(conf);
 
 	if(rank == 0) {
-		printf("Use FGPILU? %c\n", fgpiluch);
+		printf("Preconditioner choice: %c\n", precch);
 		printf("Domain boundaries in each dimension:\n");
 		for(int i = 0; i < NDIM; i++)
 			printf("%f %f ", rmin[i], rmax[i]);
@@ -265,21 +265,23 @@ int main(int argc, char* argv[])
 	ierr = KSPCreate(PETSC_COMM_WORLD, &ksp);
 	ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
 	KSPSetType(ksp, KSPRICHARDSON);
-	//KSPSetType(ksp, KSPBCGS);
 	KSPRichardsonSetScale(ksp, 1.0);
 	KSPSetTolerances(ksp, 1e-5, PETSC_DEFAULT, PETSC_DEFAULT, 100);
 	KSPGetPC(ksp, &pc);
 
-#ifdef USE_HIPERSOLVER
-	if(fgpiluch != 'y') {
-#endif
+	if(precch == 's') {
 		PCSetType(pc, PCSOR);
 		PCSORSetOmega(pc,1.0);
 		PCSORSetIterations(pc, 1, 1);
 		ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
-#ifdef USE_HIPERSOLVER
 	}
-	else {
+	else if (precch == 'i') {
+		PCSetType(pc, PCILU);
+		PCFactorSetLevels(pc, 0);
+		PCFactorSetMatOrderingType(pc, MATORDERINGNATURAL);
+	}
+#ifdef USE_HIPERSOLVER
+	else if (precch == 'f'){
 		if(rank == 0)
 			printf("Using FGPILU as preconditioner.\n");
 		PCSetType(pc, PCSHELL);
@@ -318,7 +320,7 @@ int main(int argc, char* argv[])
 	}
 
 #ifdef USE_HIPERSOLVER
-	if(fgpiluch == 'y') {
+	if(precch == 'f') {
 			cleanup_fgpilu(pc);
 	}
 #endif
