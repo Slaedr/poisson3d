@@ -8,6 +8,10 @@
 #include "cartmesh.hpp"
 #endif
 
+#include <../src/mat/impls/aij/mpi/mpiaij.h>
+#include <../src/ksp/pc/impls/factor/factor.h>
+#include <../src/ksp/pc/impls/factor/ilu/ilu.h>
+
 #ifdef USE_HIPERSOLVER
 #ifndef __FGPILU_H
 #include <fgpilu.h>
@@ -255,6 +259,8 @@ int main(int argc, char* argv[])
 
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+	
+	MatView(A, PETSC_VIEWER_STDOUT_WORLD);
 
 	// set up solver
 	/** Note that the Richardson solver with preconditioner is nothing but the preconditioner applied iteratively in
@@ -300,6 +306,24 @@ int main(int argc, char* argv[])
 	
 	ierr = KSPSolve(ksp, b, u);
 	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+
+	// view factors
+	PC_ILU* ilu = (PC_ILU*)pc->data;
+	//PC_Factor* pcfact = (PC_Factor*)pc->data;
+	//Mat fact = pcfact->fact;
+	Mat fact = ((PC_Factor*)ilu)->fact;
+	printf("ILU0 factored matrix:\n");
+	
+	/*fact->assembled = PETSC_TRUE;
+	MatView(fact, PETSC_VIEWER_STDOUT_WORLD);*/
+
+	Mat_SeqAIJ* fseq = (Mat_SeqAIJ*)fact->data;
+	for(int i = 0; i < fact->rmap->n; i++) {
+		printf("Row %d: ", i);
+		for(int j = fseq->i[i]; j < fseq->i[i+1]; j++)
+			printf("(%d: %f) ", fseq->j[j], fseq->a[j]);
+		printf("\n");
+	}
 
 	// post-process
 	if(rank == 0) {
