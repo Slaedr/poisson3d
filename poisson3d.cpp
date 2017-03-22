@@ -206,14 +206,13 @@ int main(int argc, char* argv[])
 	for(int i = 0; i < NDIM; i++)
 		fscanf(conf, "%lf", &rmax[i]);
 	fscanf(conf, "%s", temp); fscanf(conf, "%c", &chtemp); fscanf(conf, "%c", &precch);
-	if(precch=='y') {
-		fscanf(conf, "%s", temp); fscanf(conf, "%d", &nbsw);
-		fscanf(conf, "%s", temp); fscanf(conf, "%d", &nasw);
-	}
+	fscanf(conf, "%s", temp); fscanf(conf, "%d", &nbsw);
+	fscanf(conf, "%s", temp); fscanf(conf, "%d", &nasw);
 	fclose(conf);
 
 	if(rank == 0) {
 		printf("Preconditioner choice: %c\n", precch);
+		printf("Preconditioner: Number of sweeps = %d, %d\n", nbsw, nasw);
 		printf("Domain boundaries in each dimension:\n");
 		for(int i = 0; i < NDIM; i++)
 			printf("%f %f ", rmin[i], rmax[i]);
@@ -260,7 +259,10 @@ int main(int argc, char* argv[])
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 	
-	MatView(A, PETSC_VIEWER_STDOUT_WORLD);
+	/*Mat B;
+	MatConvert(A, MATSEQDENSE, MAT_INITIAL_MATRIX, &B);
+	MatView(B, PETSC_VIEWER_STDOUT_WORLD);
+	MatDestroy(&B);*/
 
 	// set up solver
 	/** Note that the Richardson solver with preconditioner is nothing but the preconditioner applied iteratively in
@@ -307,23 +309,22 @@ int main(int argc, char* argv[])
 	ierr = KSPSolve(ksp, b, u);
 	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
-	// view factors
-	PC_ILU* ilu = (PC_ILU*)pc->data;
-	//PC_Factor* pcfact = (PC_Factor*)pc->data;
-	//Mat fact = pcfact->fact;
-	Mat fact = ((PC_Factor*)ilu)->fact;
-	printf("ILU0 factored matrix:\n");
-	
-	/*fact->assembled = PETSC_TRUE;
-	MatView(fact, PETSC_VIEWER_STDOUT_WORLD);*/
+	/*if(precch == 'i') {	
+		// view factors
+		PC_ILU* ilu = (PC_ILU*)pc->data;
+		//PC_Factor* pcfact = (PC_Factor*)pc->data;
+		//Mat fact = pcfact->fact;
+		Mat fact = ((PC_Factor*)ilu)->fact;
+		printf("ILU0 factored matrix:\n");
 
-	Mat_SeqAIJ* fseq = (Mat_SeqAIJ*)fact->data;
-	for(int i = 0; i < fact->rmap->n; i++) {
-		printf("Row %d: ", i);
-		for(int j = fseq->i[i]; j < fseq->i[i+1]; j++)
-			printf("(%d: %f) ", fseq->j[j], fseq->a[j]);
-		printf("\n");
-	}
+		Mat_SeqAIJ* fseq = (Mat_SeqAIJ*)fact->data;
+		for(int i = 0; i < fact->rmap->n; i++) {
+			printf("Row %d: ", i);
+			for(int j = fseq->i[i]; j < fseq->i[i+1]; j++)
+				printf("(%d: %f) ", fseq->j[j], fseq->a[j]);
+			printf("\n");
+		}
+	}*/
 
 	// post-process
 	if(rank == 0) {

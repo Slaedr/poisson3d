@@ -1,13 +1,13 @@
 Type-of-grid('chebyshev'-or-'uniform')
 chebyshev
 Number-of-points-in-x-y-and-z
-5 5 5
+25 25 25
 Coords-of-first-point-in-x-y-and-z
 -1.0 -1.0 -1.0
 Coords-of-last-point-in-x-y-and-z
 1.0 1.0 1.0
 Preconditioner--f-fgpilu--i-ilu--s-sgs
-i
+f
 Number-of-build-sweeps
 1
 Number-of-apply-sweeps
