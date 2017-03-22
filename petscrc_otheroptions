@@ -1,4 +1,8 @@
 -ksp_type richardson
+-ksp_rtol 1e-7
+-ksp_max_it 500
+-ksp_monitor
+-ksp_final_residual
 
 -pc_type sor
 -pc_sor_its 1
