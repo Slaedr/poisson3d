@@ -12,6 +12,10 @@
 #include <../src/ksp/pc/impls/factor/factor.h>
 #include <../src/ksp/pc/impls/factor/ilu/ilu.h>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #ifdef USE_HIPERSOLVER
 #ifndef __FGPILU_H
 #include <fgpilu.h>
@@ -187,6 +191,11 @@ int main(int argc, char* argv[])
 	ierr = PetscInitialize(&argc, &argv, optfile, help); CHKERRQ(ierr);
 	MPI_Comm_size(PETSC_COMM_WORLD,&size);
 	MPI_Comm_rank(PETSC_COMM_WORLD,&rank);
+
+#ifdef _OPENMP
+	int nthreads = omp_get_max_threads();
+	printf("Max OMP threads = %d\n", nthreads);
+#endif
 
 	// Read control file
 	
