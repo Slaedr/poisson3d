@@ -1,0 +1,36 @@
+----------------------------------------
+Begin PBS Prologue Tue Apr  4 00:19:17 EDT 2017 1491279557
+Job ID:		86369588.gm-1r16-n04.guillimin.clumeq.ca
+Username:	akashi
+Group:		rck-371-01
+Nodes:		sw-2r12-n60
+End PBS Prologue Tue Apr  4 00:19:18 EDT 2017 1491279558
+----------------------------------------
+-------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code.. Per user-direction, the job has been aborted.
+-------------------------------------------------------
+--------------------------------------------------------------------------
+mpiexec detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: [[6492,1],0]
+  Exit code:    1
+--------------------------------------------------------------------------
+----------------------------------------
+Begin PBS Epilogue Tue Apr  4 00:19:26 EDT 2017 1491279566
+Job ID:		86369588.gm-1r16-n04.guillimin.clumeq.ca
+Username:	akashi
+Group:		rck-371-01
+Job Name:	poisson-fgpilu
+Session:	31905
+Limits:		neednodes=1:ppn=8,nodes=1:ppn=8,pmem=2700mb,walltime=00:01:00
+Resources:	cput=00:00:00,energy_used=0,mem=0kb,vmem=0kb,walltime=00:00:08
+Queue:		serial-short
+Account:	rck-371-aa
+Exit code:	1
+Nodes:	sw-2r12-n60
+Killing leftovers...
+
+End PBS Epilogue Tue Apr  4 00:19:26 EDT 2017 1491279566
+----------------------------------------

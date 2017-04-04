@@ -1,0 +1,8 @@
+
+poisson3d:32083 terminated with signal 4 at PC=2b941119e3e2 SP=7ffece0b0410.  Backtrace:
+/sb/project/rck-371-aa/PETSc/petsc-3.7.1_optimized/linux-gnu-optimized/lib/libpetsc.so.3.7(PetscStrncpy+0x32)[0x2b941119e3e2]
+/sb/project/rck-371-aa/PETSc/petsc-3.7.1_optimized/linux-gnu-optimized/lib/libpetsc.so.3.7(PetscSetProgramName+0x1c)[0x2b941117128c]
+/sb/project/rck-371-aa/PETSc/petsc-3.7.1_optimized/linux-gnu-optimized/lib/libpetsc.so.3.7(PetscInitialize+0x8c)[0x2b94111845cc]
+./poisson3d(main+0x117)[0x405767]
+/lib64/libc.so.6(__libc_start_main+0xfd)[0x366ae1ed5d]
+./poisson3d[0x4038e9]

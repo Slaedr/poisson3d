@@ -4,9 +4,12 @@ project (poisson3d)
 
 # Variables to be passed to cmake:
 # CMAKE_BUILD_TYPE ('Debug' or 'Release')
+# USE_OMP (bool)
+
+# Environment variables needed:
 # PETSC_DIR (directory)
 # PETSC_ARCH (string)
-# USE_OMP (bool)
+# HIPERSOLVER_DIR location of PHiPerSolver source tree
 
 # to compile with OpenMP
 if(USE_OMP)
@@ -26,7 +29,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCH
 	message(STATUS "GNU or Clang compiler found.")
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ftree-vectorizer-verbose=2")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Winline -qopt-report=2")
 endif()
 
 # PETSc
@@ -34,14 +37,14 @@ find_library(PETSC_LIB NAMES petsc PATHS $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/lib)
 include_directories($ENV{PETSC_DIR}/include $ENV{PETSC_DIR}/$ENV{PETSC_ARCH}/include)
 
 # Hipersolver
-find_library(HIPERSOLVER_LIB NAMES hipersolver PATHS ${CMAKE_SOURCE_DIR}/../build)
+find_library(HIPERSOLVER_LIB NAMES hipersolver PATHS $ENV{HIPERSOLVER_DIR}/build)
 if("${HIPERSOLVER_LIB}" STREQUAL "HIPERSOLVER_LIB-NOTFOUND")
     message(STATUS "Hipersolver library not found!")
 else()
    message(STATUS "Hipersolver library found. Setting corresponding macro variable.")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HIPERSOLVER")
 endif()
-include_directories(${CMAKE_SOURCE_DIR}/../Hipersolver)
+include_directories($ENV{HIPERSOLVER_DIR})
 
 message(STATUS "Hipersolver library = ${HIPERSOLVER_LIB}")
 
