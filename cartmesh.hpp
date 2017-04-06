@@ -144,12 +144,12 @@ public:
 	PetscInt gninpoin() const { return ninpoin; }
 	PetscReal gh() const { return h; }
 
-	const PetscInt *const pointer_npoind() const
+	const PetscInt * pointer_npoind() const
 	{
 		return npoind;
 	}
 
-	const PetscReal *const *const pointer_coords() const
+	const PetscReal *const * pointer_coords() const
 	{
 		return coords;
 	}

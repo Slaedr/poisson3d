@@ -4,6 +4,9 @@
  * Note that only zero Dirichlet BCs are currently supported.
  */
 
+#include <sys/time.h>
+#include <time.h>
+
 #ifndef __CARTMESH_H
 #include "cartmesh.hpp"
 #endif
@@ -182,6 +185,7 @@ int main(int argc, char* argv[])
 	PetscMPIInt size, rank;
 	PetscErrorCode ierr;
 	int nbsw, nasw; char precch, chtemp;
+	int nruns;
 #ifdef USE_HIPERSOLVER
 	H_ILU_data iluctrl;
 	if(rank == 0)
@@ -214,6 +218,7 @@ int main(int argc, char* argv[])
 	fscanf(conf, "%s", temp);
 	for(int i = 0; i < NDIM; i++)
 		fscanf(conf, "%lf", &rmax[i]);
+	fscanf(conf, "%s", temp); fscanf(conf, "%d", &nruns);
 	fscanf(conf, "%s", temp); fscanf(conf, "%c", &chtemp); fscanf(conf, "%c", &precch);
 	fscanf(conf, "%s", temp); fscanf(conf, "%d", &nbsw);
 	fscanf(conf, "%s", temp); fscanf(conf, "%d", &nasw);
@@ -226,6 +231,7 @@ int main(int argc, char* argv[])
 		for(int i = 0; i < NDIM; i++)
 			printf("%f %f ", rmin[i], rmax[i]);
 		printf("\n");
+		printf("Number of runs: %d\n", nruns);
 	}
 	//----------------------------------------------------------------------------------
 
@@ -272,6 +278,12 @@ int main(int argc, char* argv[])
 	MatConvert(A, MATSEQDENSE, MAT_INITIAL_MATRIX, &B);
 	MatView(B, PETSC_VIEWER_STDOUT_WORLD);
 	MatDestroy(&B);*/
+	
+	struct timeval time1, time2;
+	gettimeofday(&time1, NULL);
+	double initialwtime = (double)time1.tv_sec + (double)time1.tv_usec * 1.0e-6;
+	double initialctime = (double)clock() / (double)CLOCKS_PER_SEC;
+	int avgkspiters = 0;
 
 	// set up solver
 	/** Note that the Richardson solver with preconditioner is nothing but the preconditioner applied iteratively in
@@ -279,86 +291,106 @@ int main(int argc, char* argv[])
 	 * Without preconditioner, it is \f$ \Delta x^k = r^k \f$ where r is the residual.
 	 * In PETSc, it is actually a "modified" Richardson iteration: \f$ \Delta x^k = \omega r^k \f$ where omega is a relaxation parameter.
 	 */
-	ierr = KSPCreate(PETSC_COMM_WORLD, &ksp);
-	ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
-	KSPSetType(ksp, KSPRICHARDSON);
-	KSPRichardsonSetScale(ksp, 1.0);
-	KSPSetTolerances(ksp, 1e-5, PETSC_DEFAULT, PETSC_DEFAULT, 100);
-	KSPGetPC(ksp, &pc);
+	for(int irun = 0; irun < nruns; irun++)
+	{
+		printf("Run %d:\n", irun);
+		ierr = KSPCreate(PETSC_COMM_WORLD, &ksp);
+		ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
+		KSPSetType(ksp, KSPRICHARDSON);
+		KSPRichardsonSetScale(ksp, 1.0);
+		KSPSetTolerances(ksp, 1e-5, PETSC_DEFAULT, PETSC_DEFAULT, 100);
+		KSPGetPC(ksp, &pc);
 
-	if(precch == 's') {
-		PCSetType(pc, PCSOR);
-		PCSORSetOmega(pc,1.0);
-		PCSORSetIterations(pc, 1, 1);
-		ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
-	}
-	else if (precch == 'i') {
-		PCSetType(pc, PCILU);
-		PCFactorSetLevels(pc, 0);
-		PCFactorSetMatOrderingType(pc, MATORDERINGNATURAL);
-	}
-#ifdef USE_HIPERSOLVER
-	else if (precch == 'f'){
-		if(rank == 0)
-			printf("Using FGPILU as preconditioner.\n");
-		PCSetType(pc, PCSHELL);
-		iluctrl.nbuildsweeps = nbsw;
-		iluctrl.napplysweeps = nasw;
-		iluctrl.setup = false;
-		PCShellSetContext(pc, &iluctrl);
-		//PCShellSetSetUp(pc, &compute_fgpilu_local);
-		PCShellSetApply(pc, &apply_fgpilu_jacobi_local);
-		//PCShellSetDestroy(pc, &cleanup_fgpilu);
-		PCShellSetName(pc, "FGPILU");
-		compute_fgpilu_local(pc);
-	}
-#endif
-	ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
-	
-	ierr = KSPSolve(ksp, b, u);
-	ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-
-	/*if(precch == 'i') {	
-		// view factors
-		PC_ILU* ilu = (PC_ILU*)pc->data;
-		//PC_Factor* pcfact = (PC_Factor*)pc->data;
-		//Mat fact = pcfact->fact;
-		Mat fact = ((PC_Factor*)ilu)->fact;
-		printf("ILU0 factored matrix:\n");
-
-		Mat_SeqAIJ* fseq = (Mat_SeqAIJ*)fact->data;
-		for(int i = 0; i < fact->rmap->n; i++) {
-			printf("Row %d: ", i);
-			for(int j = fseq->i[i]; j < fseq->i[i+1]; j++)
-				printf("(%d: %f) ", fseq->j[j], fseq->a[j]);
-			printf("\n");
+		if(precch == 's') {
+			PCSetType(pc, PCSOR);
+			PCSORSetOmega(pc,1.0);
+			PCSORSetIterations(pc, 1, 1);
+			ierr = PCSORSetSymmetric(pc, SOR_LOCAL_SYMMETRIC_SWEEP); CHKERRQ(ierr);
 		}
-	}*/
+		else if (precch == 'i') {
+			PCSetType(pc, PCILU);
+			PCFactorSetLevels(pc, 0);
+			PCFactorSetMatOrderingType(pc, MATORDERINGNATURAL);
+		}
+#ifdef USE_HIPERSOLVER
+		else if (precch == 'f'){
+			if(rank == 0)
+				printf(" Using FGPILU as preconditioner.\n");
+			PCSetType(pc, PCSHELL);
+			iluctrl.nbuildsweeps = nbsw;
+			iluctrl.napplysweeps = nasw;
+			iluctrl.setup = false;
+			iluctrl.cputime = 0; iluctrl.walltime = 0;
+			PCShellSetContext(pc, &iluctrl);
+			//PCShellSetSetUp(pc, &compute_fgpilu_local);
+			PCShellSetApply(pc, &apply_fgpilu_jacobi_local);
+			//PCShellSetDestroy(pc, &cleanup_fgpilu);
+			PCShellSetName(pc, "FGPILU");
+			compute_fgpilu_local(pc);
+		}
+#endif
+		ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
+		
+		ierr = KSPSolve(ksp, b, u);
+		ierr = KSPView(ksp,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
 
-	// post-process
-	if(rank == 0) {
-		int kspiters; PetscReal rnorm;
-		KSPGetIterationNumber(ksp, &kspiters);
-		printf("Number of KSP iterations = %d\n", kspiters);
-		KSPGetResidualNorm(ksp, &rnorm);
-		printf("KSP residual norm = %f\n", rnorm);
-	}
-	
-	PetscReal errnorm;
-	VecCopy(u,err);
-	VecAXPY(err, -1.0, uexact);
-	errnorm = computeNorm(&m, err, da);
-	if(rank == 0) {
-		printf("h and error: %f  %f\n", m.gh(), errnorm);
-		printf("log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));
-	}
+		/*if(precch == 'i') {	
+			// view factors
+			PC_ILU* ilu = (PC_ILU*)pc->data;
+			//PC_Factor* pcfact = (PC_Factor*)pc->data;
+			//Mat fact = pcfact->fact;
+			Mat fact = ((PC_Factor*)ilu)->fact;
+			printf("ILU0 factored matrix:\n");
+
+			Mat_SeqAIJ* fseq = (Mat_SeqAIJ*)fact->data;
+			for(int i = 0; i < fact->rmap->n; i++) {
+				printf("Row %d: ", i);
+				for(int j = fseq->i[i]; j < fseq->i[i+1]; j++)
+					printf("(%d: %f) ", fseq->j[j], fseq->a[j]);
+				printf("\n");
+			}
+		}*/
+
+		// post-process
+		if(rank == 0) {
+			int kspiters; PetscReal rnorm;
+			KSPGetIterationNumber(ksp, &kspiters);
+			printf(" Number of KSP iterations = %d\n", kspiters);
+			avgkspiters += kspiters;
+			KSPGetResidualNorm(ksp, &rnorm);
+			printf(" KSP residual norm = %f\n", rnorm);
+		}
+		
+		PetscReal errnorm;
+		VecCopy(u,err);
+		VecAXPY(err, -1.0, uexact);
+		errnorm = computeNorm(&m, err, da);
+		if(rank == 0) {
+			printf(" h and error: %f  %f\n", m.gh(), errnorm);
+			printf(" log h and log error: %f  %f\n", log10(m.gh()), log10(errnorm));
+		}
 
 #ifdef USE_HIPERSOLVER
-	if(precch == 'f') {
+		if(precch == 'f') {
+			/*if(rank == 0) {
+				printf(" Wall time taken by FGPILU = %f\n", iluctrl.walltime);
+				printf(" CPU time taken by FGPILU = %f\n", iluctrl.cputime);
+			}*/
 			cleanup_fgpilu(pc);
-	}
+		}
 #endif
-	KSPDestroy(&ksp);
+		KSPDestroy(&ksp);
+	}
+
+	gettimeofday(&time2, NULL);
+	double finalwtime = (double)time2.tv_sec + (double)time2.tv_usec * 1.0e-6;
+	double finalctime = (double)clock() / (double)CLOCKS_PER_SEC;
+	if(rank==0) {
+		printf("Total times: Wall = %f, CPU = %f\n", finalwtime-initialwtime, finalctime-initialctime);
+		printf("Time taken by FGPILU: Wall = %f, CPU = %f\n", iluctrl.walltime, iluctrl.cputime);
+		printf("Average number of iterations: %d\n", (int)(avgkspiters/nruns));
+	}
+
 	VecDestroy(&u);
 	VecDestroy(&uexact);
 	VecDestroy(&b);
