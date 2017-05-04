@@ -1,5 +1,4 @@
 -ksp_type richardson
 -ksp_rtol 1e-7
--ksp_max_it 800
--ksp_monitor
+-ksp_max_it 1000
 -ksp_final_residual
