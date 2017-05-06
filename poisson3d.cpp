@@ -320,7 +320,8 @@ int main(int argc, char* argv[])
 			iluctrl.nbuildsweeps = nbsw;
 			iluctrl.napplysweeps = nasw;
 			iluctrl.setup = false;
-			iluctrl.cputime = 0; iluctrl.walltime = 0;
+			iluctrl.factorcputime = 0; iluctrl.factorwalltime = 0;
+			iluctrl.applycputime = 0; iluctrl.applywalltime = 0;
 			PCShellSetContext(pc, &iluctrl);
 			//PCShellSetSetUp(pc, &compute_fgpilu_local);
 			PCShellSetApply(pc, &apply_fgpilu_jacobi_local);
@@ -387,7 +388,11 @@ int main(int argc, char* argv[])
 	double finalctime = (double)clock() / (double)CLOCKS_PER_SEC;
 	if(rank==0) {
 		printf("Total times: Wall = %f, CPU = %f\n", finalwtime-initialwtime, finalctime-initialctime);
-		printf("Time taken by FGPILU: Wall = %f, CPU = %f\n", iluctrl.walltime, iluctrl.cputime);
+		printf("Time taken by FGPILU factorization: Wall = %f, CPU = %f\n", iluctrl.factorwalltime, iluctrl.factorcputime);
+		printf("Time taken by FGPILU application: Wall = %f, CPU = %f\n", iluctrl.applywalltime, iluctrl.applycputime);
+		double totalwall = iluctrl.factorwalltime + iluctrl.applywalltime;
+		double totalcpu = iluctrl.factorcputime + iluctrl.applycputime;
+		printf("Time taken by FGPILU total: Wall = %f, CPU = %f\n", totalwall, totalcpu);
 		printf("Average number of iterations: %d\n", (int)(avgkspiters/nruns));
 	}
 
