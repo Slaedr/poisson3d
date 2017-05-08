@@ -4,12 +4,22 @@ project (poisson3d)
 
 # Variables to be passed to cmake:
 # CMAKE_BUILD_TYPE ('Debug' or 'Release')
-# USE_OMP (bool)
+# USE_OMP: non-zero for compiling with OpenMP
+# BUILD_KNC: non-zero to build for Xeon Phi KNC
 
 # Environment variables needed:
 # PETSC_DIR (directory)
 # PETSC_ARCH (string)
 # HIPERSOLVER_DIR location of PHiPerSolver source tree
+#  libhipersolver.so is assumed to be in $HIPERSOLVER_LIB/build.
+
+if(BUILD_KNC)
+	message(STATUS "Building for KNC, with MKL")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmic")
+	set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mmic")
+	set (CMAKE_EXECUTABLE_SUFFIX ".MIC")
+	include_directories($ENV{MKLROOT}/include)
+endif()
 
 # to compile with OpenMP
 if(USE_OMP)
@@ -41,7 +51,7 @@ find_library(HIPERSOLVER_LIB NAMES hipersolver PATHS $ENV{HIPERSOLVER_DIR}/build
 if("${HIPERSOLVER_LIB}" STREQUAL "HIPERSOLVER_LIB-NOTFOUND")
     message(STATUS "Hipersolver library not found!")
 else()
-   message(STATUS "Hipersolver library found. Setting corresponding macro variable.")
+   message(STATUS "Hipersolver library found.")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_HIPERSOLVER")
 endif()
 include_directories($ENV{HIPERSOLVER_DIR})
@@ -63,3 +73,6 @@ endif()
 
 add_executable(poisson3d poisson3d.cpp)
 target_link_libraries(poisson3d ${PETSC_LIB} ${HIPERSOLVER_LIB})
+if(BUILD_KNC)
+	target_link_libraries(poisson3d $ENV{MKLROOT}/lib/mic/libmkl_rt.so m dl pthread)
+endif()
