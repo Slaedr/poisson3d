@@ -330,6 +330,10 @@ int main(int argc, char* argv[])
 			compute_fgpilu_local(pc);
 		}
 #endif
+		else {
+			PCSetType(pc, PCNONE);
+		}
+		
 		ierr = KSPSetFromOptions(ksp); CHKERRQ(ierr);
 		
 		ierr = KSPSolve(ksp, b, u);

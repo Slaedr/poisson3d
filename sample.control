@@ -6,7 +6,9 @@ Coords-of-first-point-in-x-y-and-z
 -1.0 -1.0 -1.0
 Coords-of-last-point-in-x-y-and-z
 1.0 1.0 1.0
-Preconditioner--f-fgpilu--i-ilu--s-sgs
+Number-of-repititions-of-solver
+1
+Preconditioner--f-fgpilu--i-ilu--s-sgs--n-none
 f
 Number-of-build-sweeps
 2
