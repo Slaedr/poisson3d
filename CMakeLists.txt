@@ -11,7 +11,7 @@ project (poisson3d)
 # PETSC_DIR (directory)
 # PETSC_ARCH (string)
 # HIPERSOLVER_DIR location of PHiPerSolver source tree
-#  libhipersolver.so is assumed to be in $HIPERSOLVER_LIB/build.
+#  libhipersolver.so is assumed to be in $HIPERSOLVER_DIR/build.
 
 if(BUILD_KNC)
 	message(STATUS "Building for KNC, with MKL")
