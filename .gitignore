@@ -2,5 +2,5 @@
 
 build/** 
 
-test.control
+*.control
 *.rc
