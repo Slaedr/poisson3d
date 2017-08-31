@@ -4,7 +4,7 @@ project (poisson3d)
 
 # Variables to be passed to cmake:
 # CMAKE_BUILD_TYPE ('Debug' or 'Release')
-# USE_OMP: non-zero for compiling with OpenMP
+# OMP: non-zero for compiling with OpenMP
 # BUILD_KNC: non-zero to build for Xeon Phi KNC
 
 # Environment variables needed:
@@ -22,7 +22,7 @@ if(BUILD_KNC)
 endif()
 
 # to compile with OpenMP
-if(USE_OMP)
+if(OMP)
 	message(STATUS "Compiling with OpenMP")
 	if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
 		message(STATUS "GNU compiler found.")

@@ -198,7 +198,8 @@ int main(int argc, char* argv[])
 
 #ifdef _OPENMP
 	int nthreads = omp_get_max_threads();
-	printf("Max OMP threads = %d\n", nthreads);
+	if(rank==0)
+		printf("Max OMP threads = %d\n", nthreads);
 #endif
 
 	// Read control file
@@ -293,7 +294,8 @@ int main(int argc, char* argv[])
 	 */
 	for(int irun = 0; irun < nruns; irun++)
 	{
-		printf("Run %d:\n", irun);
+		if(rank==0)
+			printf("Run %d:\n", irun);
 		ierr = KSPCreate(PETSC_COMM_WORLD, &ksp);
 		ierr = KSPSetOperators(ksp, A, A); CHKERRQ(ierr);
 		KSPSetType(ksp, KSPRICHARDSON);
